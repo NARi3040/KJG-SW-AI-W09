@@ -14,12 +14,12 @@
       <a href="https://github.com/NARi3040"><b>박준호</b></a>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/donghwanoh97"><img src="https://github.com/donghwanoh97.png?size=200" width="150" alt="오동환"></a><br><br>
-      <a href="https://github.com/donghwanoh97"><b>오동환</b></a>
+      <a href="https://github.com/choimoohun"><img src="https://github.com/choimoohun.png?size=200" width="150" alt="최무헌"></a><br><br>
+      <a href="https://github.com/choimoohun"><b>최무헌</b></a>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/jye-1123"><img src="https://github.com/jye-1123.png?size=200" width="150" alt="지영은"></a><br><br>
-      <a href="https://github.com/jye-1123"><b>지영은</b></a>
+      <a href="https://github.com/hnjee"><img src="https://github.com/hnjee.png?size=200" width="150" alt="이현지"></a><br><br>
+      <a href="https://github.com/hnjee"><b>이현지</b></a>
     </td>
   </tr>
 </table>
