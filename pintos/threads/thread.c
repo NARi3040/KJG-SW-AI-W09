@@ -18,6 +18,7 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #ifdef USERPROG
+#include "threads/malloc.h"
 #include "userprog/process.h"
 #endif
 
@@ -298,7 +299,8 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	/* user program */
+#ifdef USERPROG
+	/* user program: child_info는 process.h에 있고 해제도 process_exit()가 하므로 USERPROG 빌드에서만 만듦 */
 	struct thread *curr = thread_current();
 	struct child_info *info = malloc(sizeof(*info));
 
@@ -312,6 +314,7 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 
 	t->self_info = info;
 	list_push_back(&curr->children, &info->elem);
+#endif
 
 	/* run queue에 추가함. */
 	thread_unblock (t);

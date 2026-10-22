@@ -78,7 +78,7 @@
   - 파일 이름(`create` `remove` `open`)은 `copy_name()`으로 128바이트(`NAME_BUF`) 커널 버퍼에 먼저 복사합니다. 더 긴 이름은 실패 처리합니다.
   - `read`/`write`는 512바이트(`IO_CHUNK`) 커널 스택 버퍼를 거칩니다. 락 안에서는 커널 버퍼만 만지고, 유저 버퍼와의 복사는 락 밖에서 합니다.
   - 이유: Project 3에서 lazy loading이나 mmap 때문에 유저 버퍼 접근 중 page fault가 나고, fault 처리가 파일을 읽느라 `filesys_lock`을 잡으면, 이미 락을 쥔 상태라 패닉이 납니다. P2에서는 필요 없지만 미리 이렇게 만들어 뒀습니다.
-- 유저 포인터 검증: `check_address()`(주소 하나), `check_buffer()`(버퍼가 걸친 모든 페이지), `copy_name()`(문자열을 복사하며 새 페이지마다 검사). 모두 `is_user_vaddr()` + `pml4_get_page()`로 확인하고 실패하면 `sys_exit(-1)`입니다.
+- 유저 포인터 검증: `check_address()`(주소 하나), `check_buffer()`(버퍼가 걸친 모든 페이지), `copy_name()`(문자열을 복사하며 새 페이지마다 검사). 모두 `is_user_vaddr()` + `pml4_get_page()`로 확인하고 실패하면 `sys_exit(-1)`입니다. `read`의 버퍼는 커널이 쓰므로 `check_buffer()`가 PTE 쓰기 권한까지 확인합니다(CR0.WP가 꺼져 있어 커널 쓰기는 읽기 전용 페이지에서도 폴트가 안 남).
 
 ## 6. 알려진 한계
 

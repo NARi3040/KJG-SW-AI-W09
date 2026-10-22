@@ -136,22 +136,34 @@ void check_address(const void *addr) {
  * 버퍼가 걸친 페이지마다 한 번씩 검사함. 바이트 단위가 아니라 페이지 단위로 도는 이유는
  * 매핑 여부가 페이지 단위로 정해지기 때문임.
  *
+ * 커널이 쓸 버퍼(read)면 페이지의 쓰기 권한까지 봄. CR0.WP가 꺼져 있어서 커널이
+ * 읽기 전용 유저 페이지(코드 영역)에 써도 page fault가 나지 않고 그대로 써지기 때문임.
+ *
  * @param[in] buf 유저 버퍼 시작 주소
  * @param[in] size 버퍼 크기(바이트). 0이면 시작 주소만 검사함
+ * @param[in] write 커널이 이 버퍼에 쓰면 true. 쓰기 권한 없는 페이지면 sys_exit(-1)
  *
- * @note 첫 페이지는 check_address(buf)가, 그 뒤 페이지는 각 페이지의 시작 주소로 검사함.
+ * @note 첫 페이지는 buf로, 그 뒤 페이지는 각 페이지의 시작 주소로 검사함.
  * @note
  * 임시: 포인터 검증 함수가 나오면 그 호출로 바꿀 것.
  * check_address()가 pml4_get_page()를 쓰므로 프로젝트 3의 lazy 페이지에는 맞지 않음.
  */
-static void check_buffer(const void *buf, size_t size) {
+static void check_buffer(const void *buf, size_t size, bool write) {
+	uint64_t *pml4 = thread_current()->pml4;
+
 	check_address(buf);
+	if (write && !is_writable(pml4e_walk(pml4, (uint64_t)buf, false))) {
+		sys_exit(-1);
+	}
 	if (size == 0) {
 		return;
 	}
 	const char *end = (const char *)buf + size - 1;
 	for (const char *p = (const char *)pg_round_down(buf) + PGSIZE; p <= end; p += PGSIZE) {
 		check_address(p);
+		if (write && !is_writable(pml4e_walk(pml4, (uint64_t)p, false))) {
+			sys_exit(-1);
+		}
 	}
 }
 
@@ -460,7 +472,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			void * buffer = (void *)f->R.rsi;
 			unsigned size = (unsigned)f->R.rdx;
 
-			check_buffer(buffer, size);
+			check_buffer(buffer, size, true);
 
 			if (fd == 0) {
 				uint8_t *buf = buffer;
@@ -508,7 +520,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			const void *buffer = (const void *)f->R.rsi;
 			unsigned size = (unsigned)f->R.rdx;
 
-			check_buffer(buffer, size);
+			check_buffer(buffer, size, false);
 
 			if (fd == 1) {
 				putbuf(buffer, size);

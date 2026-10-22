@@ -321,6 +321,8 @@ error:
  * - intr_frame을 struct thread의 tf가 아니라 로컬 변수에 만드는 이유: tf는 컨텍스트 스위치
  *   때마다 덮어써지므로, load()가 채우는 도중 스케줄되면 값이 깨짐
  * - load()가 끝나면 명령줄 문자열은 이미 새 유저 스택에 복사되어 있으므로 f_name 페이지를 해제함
+ * - 이전 실행 파일(using_file)은 주소 공간을 버린 직후 닫음. 안 닫으면 load()가 덮어써서
+ *   파일이 새고 그 파일의 deny-write가 영영 안 풀림
  *
  * @param[in] f_name palloc으로 받은 명령줄 페이지 (소유권 넘겨받고, 성공·실패 모두 여기서 해제)
  * @return 성공하면 반환하지 않음. 로드에 실패하면 -1
@@ -331,6 +333,7 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
+	struct thread *curr = thread_current ();
 	bool success;
 
 	/* thread 구조체 안의 intr_frame은 사용할 수 없음.
@@ -343,6 +346,13 @@ process_exec (void *f_name) {
 
 	/* 먼저 현재 컨텍스트를 제거함 */
 	process_cleanup();
+
+	/* 이전 실행 파일은 더 이상 실행 중이 아니므로 닫아 deny-write를 풂.
+	 * load()가 using_file을 새 파일로 덮어쓰기 전에 닫아야 이전 파일이 새지 않음. */
+	lock_acquire (&filesys_lock);
+	file_close (curr->using_file);
+	lock_release (&filesys_lock);
+	curr->using_file = NULL;
 
 	/* 그런 다음 바이너리를 로드함 */
 
