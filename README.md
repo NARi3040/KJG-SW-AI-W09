@@ -51,7 +51,6 @@ Project 3을 시작한다면 위에서부터 순서대로 읽는 것을 추천�
 
 | 문서 | 내용 |
 | --- | --- |
-| [Project 2 구현 방식](docs/userprog-implementation.md) | 프로세스 구조체, fork/wait/exit 동기화, fd 테이블, 락 규칙, 알려진 한계 |
 | [Project 3 시작 가이드](docs/project3-guide.md) | 범위와 배점, 테스트 묶음, 추천 구현 순서, 스켈레톤 위치 |
 | [개발 환경과 테스트](docs/dev-environment.md) | DevContainer, 빌드와 테스트 실행, pintos-util |
 | [주석 규칙](docs/comment-style.md) | Doxygen 주석 형식과 HTML 문서 생성. P2에서 작성한 함수의 설계 의도는 소스의 Doxygen 주석에 있음 |
