@@ -287,6 +287,8 @@ __do_fork (void *aux) {
 	 * TODO:       성공적으로 복제하기 전까지는 부모가 fork()에서 반환하면
 	 * TODO:       안 된다는 점에 주의할 것. */
 	fd_table_create();
+	if (current->fd_table == NULL)
+		goto error;
 	for (int i = 2; i < FD_MAX; i++) {
 		if(!parent->fd_table[i]) continue;
 
@@ -294,7 +296,16 @@ __do_fork (void *aux) {
 		if(f == NULL) { goto error; }
 		current->fd_table[i] = f;
 	}
-	
+
+	/* 실행 파일도 deny-write째 복제함. 부모가 먼저 끝나도 자식이 도는 동안 쓰기 금지가 유지되게 함 */
+	if (parent->using_file != NULL) {
+		lock_acquire (&filesys_lock);
+		current->using_file = file_duplicate (parent->using_file);
+		lock_release (&filesys_lock);
+		if (current->using_file == NULL)
+			goto error;
+	}
+
 
 	process_init ();
 

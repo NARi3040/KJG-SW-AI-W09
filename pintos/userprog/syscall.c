@@ -355,36 +355,37 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_HALT:
 			power_off();
 			break;
-		case SYS_EXIT: {		/* exit(status) 첫 인자는 rdi로 전달 */
-			int status = (int)f->R.rdi;
-			struct thread *cur = thread_current();
-
-			struct exit_info *record = malloc(sizeof(struct exit_info));		/* 종료 상태 저장할 실제 메모리 공간 할당 */
-			if (record == NULL) {		/* 할당 실패하면 기록에 접근하지 않고 현재 스레드 종료 */
-				thread_exit();
-			}
-			
-			record->status = status;		// 구조체 안에 종료 상태 저장
-
-			cur->exit_info = record;		// process_exit()에서도 같은 기록 찾을 수 있도록 현재 스레드에 구조체 주소 저장
-
-			thread_exit();		/* 내부에서 process_exit() 호출해 자원 정리하고 현재 스레드 종료 */
-		}
+		case SYS_EXIT:		/* exit(status) 첫 인자는 rdi로 전달 */
+			sys_exit((int)f->R.rdi);
 		case SYS_FORK:
 			f->R.rax = process_fork(f->R.rdi, f);
 			break;
-		case SYS_EXEC:
-			check_address(f->R.rdi);	
-			size_t len = strlen((char *)f->R.rdi) + 1;
-			char *k = palloc_get_page(len);
+		case SYS_EXEC: {
+			const char *cmd = (const char *)f->R.rdi;
+
+			// 페이지를 받기 전에 NUL까지 검사함. 복사 도중 sys_exit하면 받은 페이지가 샘
+			check_address(cmd);
+			size_t len = 0;
+			while (cmd[len] != '\0') {
+				len++;
+				if (len == PGSIZE) {	// NUL 포함 한 페이지를 넘는 명령줄은 실패
+					sys_exit(-1);
+				}
+				if (pg_ofs(cmd + len) == 0) {	// 새 페이지에 들어설 때만 검사
+					check_address(cmd + len);
+				}
+			}
+
+			char *k = palloc_get_page(0);
 			if (k == NULL) {
 				sys_exit(-1);
 			}
-			strlcpy(k, f->R.rdi, len);
-			
-			f->R.rax = process_exec(k);
+			memcpy(k, cmd, len + 1);
+
+			process_exec(k);	// 성공하면 돌아오지 않음
 			sys_exit(-1);
 			break;
+		}
 		case SYS_WAIT:
 			f->R.rax = process_wait(f->R.rdi);
 			break;
