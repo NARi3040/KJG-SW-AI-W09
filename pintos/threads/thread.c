@@ -303,6 +303,10 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	/* user program: child_info는 process.h에 있고 해제도 process_exit()가 하므로 USERPROG 빌드에서만 만듦 */
 	struct thread *curr = thread_current();
 	struct child_info *info = malloc(sizeof(*info));
+	if (info == NULL) {		/* 아직 run queue에 안 넣었으므로 페이지만 돌려주면 됨 */
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
 
 	info->tid = t->tid;
 	info->exit_status = -1;

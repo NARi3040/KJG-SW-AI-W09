@@ -1,6 +1,7 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
+#include <debug.h>
 #include "threads/synch.h"
 
 struct file;
@@ -16,5 +17,5 @@ void fd_table_create (void);
 int fd_add (struct file *file);
 void fd_close (int fd);
 void fd_table_close_all (void);
-void sys_exit (int status);
+void sys_exit (int status) NO_RETURN;
 #endif /* userprog/syscall.h */
