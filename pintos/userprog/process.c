@@ -289,13 +289,15 @@ __do_fork (void *aux) {
 	fd_table_create();
 	if (current->fd_table == NULL)
 		goto error;
+	lock_acquire (&filesys_lock);
 	for (int i = 2; i < FD_MAX; i++) {
 		if(!parent->fd_table[i]) continue;
 
 		struct file *f = file_duplicate(parent->fd_table[i]);
-		if(f == NULL) { goto error; }
+		if(f == NULL) { lock_release (&filesys_lock); goto error; }
 		current->fd_table[i] = f;
 	}
+	lock_release (&filesys_lock);
 
 	/* 실행 파일도 deny-write째 복제함. 부모가 먼저 끝나도 자식이 도는 동안 쓰기 금지가 유지되게 함 */
 	if (parent->using_file != NULL) {
@@ -515,7 +517,10 @@ process_exit (void) {
 			free (info);
 	}
 
-	file_close(curr->using_file);
+	lock_acquire (&filesys_lock);
+	file_close (curr->using_file);
+	lock_release (&filesys_lock);
+	curr->using_file = NULL;
 }
 
 /* 현재 프로세스의 리소스를 해제함. */
@@ -669,7 +674,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	/* 실행 파일을 엶. */
+	/* 실행 파일을 엶. 세그먼트 로드까지 파일 연산은 락 아래에서 함. */
+	lock_acquire (&filesys_lock);
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", argv[0]);
@@ -743,6 +749,9 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	/* 인자 복사는 유저 메모리를 건드리므로 락 밖에서 함. */
+	lock_release (&filesys_lock);
+
 	/* 스택을 설정함. */
 	if (!setup_stack(if_))
 		goto done;
@@ -777,6 +786,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* 로드가 성공하든 실패하든 여기에 도달함. */
+	if (lock_held_by_current_thread (&filesys_lock))
+		lock_release (&filesys_lock);
 	return success;
 }
 
