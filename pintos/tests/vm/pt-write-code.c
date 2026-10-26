@@ -1,5 +1,5 @@
-/* Try to write to the code segment.
-   The process must be terminated with -1 exit code. */
+/* code segment에 쓰기를 시도함.
+   프로세스는 종료 코드 -1로 종료되어야 함. */
 
 #include "tests/lib.h"
 #include "tests/main.h"

@@ -12,38 +12,38 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 
-/* Page allocator.  Hands out memory in page-size (or
-   page-multiple) chunks.  See malloc.h for an allocator that
-   hands out smaller chunks.
+/* 페이지 할당자.  페이지 크기(또는 페이지의 배수) 단위로
+   메모리를 내어 줌.  더 작은 단위로 내어 주는 할당자는
+   malloc.h를 참고할 것.
 
-   System memory is divided into two "pools" called the kernel
-   and user pools.  The user pool is for user (virtual) memory
-   pages, the kernel pool for everything else.  The idea here is
-   that the kernel needs to have memory for its own operations
-   even if user processes are swapping like mad.
+   시스템 메모리는 kernel pool과 user pool이라는 두 개의
+   "pool"로 나뉨.  user pool은 유저 (가상) 메모리 페이지용이고,
+   kernel pool은 그 외 모든 용도임.  유저 프로세스가 미친 듯이
+   swapping을 하더라도 커널이 자체 동작을 위한 메모리를 가져야
+   한다는 것이 여기서의 취지임.
 
-   By default, half of system RAM is given to the kernel pool and
-   half to the user pool.  That should be huge overkill for the
-   kernel pool, but that's just fine for demonstration purposes. */
+   기본적으로 시스템 RAM의 절반은 kernel pool에, 나머지 절반은
+   user pool에 주어짐.  kernel pool에는 터무니없이 큰 양이겠지만,
+   시연 목적으로는 전혀 문제없음. */
 
-/* A memory pool. */
+/* 메모리 pool. */
 struct pool {
-	struct lock lock;               /* Mutual exclusion. */
-	struct bitmap *used_map;        /* Bitmap of free pages. */
-	uint8_t *base;                  /* Base of pool. */
+	struct lock lock;               /* 상호 배제. */
+	struct bitmap *used_map;        /* 페이지 사용 여부 bitmap. */
+	uint8_t *base;                  /* pool의 시작 주소. */
 };
 
-/* Two pools: one for kernel data, one for user pages. */
+/* 두 개의 pool: 하나는 커널 데이터용, 하나는 유저 페이지용. */
 static struct pool kernel_pool, user_pool;
 
-/* Maximum number of pages to put in user pool. */
+/* user pool에 넣을 최대 페이지 수. */
 size_t user_page_limit = SIZE_MAX;
 static void
 init_pool (struct pool *p, void **bm_base, uint64_t start, uint64_t end);
 
 static bool page_from_pool (const struct pool *, void *page);
 
-/* multiboot info */
+/* multiboot 정보 */
 struct multiboot_info {
 	uint32_t flags;
 	uint32_t mem_low;
@@ -53,7 +53,7 @@ struct multiboot_info {
 	uint32_t mmap_base;
 };
 
-/* e820 entry */
+/* e820 엔트리 */
 struct e820_entry {
 	uint32_t size;
 	uint32_t mem_lo;
@@ -63,7 +63,7 @@ struct e820_entry {
 	uint32_t type;
 };
 
-/* Represent the range information of the ext_mem/base_mem */
+/* ext_mem/base_mem의 범위 정보를 나타냄. */
 struct area {
 	uint64_t start;
 	uint64_t end;
@@ -75,7 +75,7 @@ struct area {
 #define ACPI_RECLAIMABLE 3
 #define APPEND_HILO(hi, lo) (((uint64_t) ((hi)) << 32) + (lo))
 
-/* Iterate on the e820 entry, parse the range of basemem and extmem. */
+/* e820 엔트리를 순회하며 basemem과 extmem의 범위를 파싱함. */
 static void
 resolve_area_info (struct area *base_mem, struct area *ext_mem) {
 	struct multiboot_info *mb_info = ptov (MULTIBOOT_INFO);
@@ -92,21 +92,21 @@ resolve_area_info (struct area *base_mem, struct area *ext_mem) {
 
 			struct area *area = start < BASE_MEM_THRESHOLD ? base_mem : ext_mem;
 
-			// First entry that belong to this area.
+			// 이 area에 속하는 첫 번째 엔트리.
 			if (area->size == 0) {
 				*area = (struct area) {
 					.start = start,
 					.end = end,
 					.size = size,
 				};
-			} else {  // otherwise
-				// Extend start
+			} else {  // 그 외의 경우
+				// start를 확장함.
 				if (area->start > start)
 					area->start = start;
-				// Extend end
+				// end를 확장함.
 				if (area->end < end)
 					area->end = end;
-				// Extend size
+				// size를 확장함.
 				area->size += size;
 			}
 		}
@@ -114,10 +114,10 @@ resolve_area_info (struct area *base_mem, struct area *ext_mem) {
 }
 
 /*
- * Populate the pool.
- * All the pages are manged by this allocator, even include code page.
- * Basically, give half of memory to kernel, half to user.
- * We push base_mem portion to the kernel as much as possible.
+ * pool을 채움.
+ * 코드 페이지를 포함한 모든 페이지가 이 할당자에 의해 관리됨.
+ * 기본적으로 메모리의 절반은 커널에, 절반은 유저에게 줌.
+ * base_mem 부분은 가능한 한 커널 쪽으로 몰아 줌.
  */
 static void
 populate_pools (struct area *base_mem, struct area *ext_mem) {
@@ -129,7 +129,7 @@ populate_pools (struct area *base_mem, struct area *ext_mem) {
 		user_page_limit : total_pages / 2;
 	uint64_t kern_pages = total_pages - user_pages;
 
-	// Parse E820 map to claim the memory region for each pool.
+	// E820 map을 파싱하여 각 pool이 차지할 메모리 영역을 확보함.
 	enum { KERN_START, KERN, USER_START, USER } state = KERN_START;
 	uint64_t rem = kern_pages;
 	uint64_t region_start = 0, end = 0, start, size, size_in_pg;
@@ -157,10 +157,10 @@ populate_pools (struct area *base_mem, struct area *ext_mem) {
 						rem -= size_in_pg;
 						break;
 					}
-					// generate kernel pool
+					// kernel pool을 생성함.
 					init_pool (&kernel_pool,
 							&free_start, region_start, start + rem * PGSIZE);
-					// Transition to the next state
+					// 다음 상태로 전이함.
 					if (rem == size_in_pg) {
 						rem = user_pages;
 						state = USER_START;
@@ -187,10 +187,10 @@ populate_pools (struct area *base_mem, struct area *ext_mem) {
 		}
 	}
 
-	// generate the user pool
+	// user pool을 생성함.
 	init_pool(&user_pool, &free_start, region_start, end);
 
-	// Iterate over the e820_entry. Setup the usable.
+	// e820_entry를 순회하며 usable 영역을 설정함.
 	uint64_t usable_bound = (uint64_t) free_start;
 	struct pool *pool;
 	void *pool_end;
@@ -204,8 +204,8 @@ populate_pools (struct area *base_mem, struct area *ext_mem) {
 			uint64_t size = APPEND_HILO (entry->len_hi, entry->len_lo);
 			uint64_t end = start + size;
 
-			// TODO: add 0x1000 ~ 0x200000, This is not a matter for now.
-			// All the pages are unuable
+			// TODO: 0x1000 ~ 0x200000을 추가할 것. 지금은 문제가 되지 않음.
+			// 모든 페이지가 사용 불가능함.
 			if (end < usable_bound)
 				continue;
 
@@ -234,11 +234,11 @@ split:
 	}
 }
 
-/* Initializes the page allocator and get the memory size */
+/* 페이지 할당자를 초기화하고 메모리 크기를 얻음. */
 uint64_t
 palloc_init (void) {
-  /* End of the kernel as recorded by the linker.
-     See kernel.lds.S. */
+  /* 링커가 기록한 커널의 끝.
+     kernel.lds.S를 참고할 것. */
 	extern char _end;
 	struct area base_mem = { .size = 0 };
 	struct area ext_mem = { .size = 0 };
@@ -253,12 +253,12 @@ palloc_init (void) {
 	return ext_mem.end;
 }
 
-/* Obtains and returns a group of PAGE_CNT contiguous free pages.
-   If PAL_USER is set, the pages are obtained from the user pool,
-   otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
-   then the pages are filled with zeros.  If too few pages are
-   available, returns a null pointer, unless PAL_ASSERT is set in
-   FLAGS, in which case the kernel panics. */
+/* 연속된 빈 페이지 PAGE_CNT개를 얻어 반환함.
+   PAL_USER가 설정되어 있으면 user pool에서, 그렇지 않으면
+   kernel pool에서 페이지를 얻음.  FLAGS에 PAL_ZERO가 설정되어
+   있으면 페이지를 0으로 채움.  사용 가능한 페이지가 너무 적으면
+   null 포인터를 반환하지만, FLAGS에 PAL_ASSERT가 설정되어 있으면
+   커널이 panic함. */
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;
@@ -284,19 +284,18 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	return pages;
 }
 
-/* Obtains a single free page and returns its kernel virtual
-   address.
-   If PAL_USER is set, the page is obtained from the user pool,
-   otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
-   then the page is filled with zeros.  If no pages are
-   available, returns a null pointer, unless PAL_ASSERT is set in
-   FLAGS, in which case the kernel panics. */
+/* 빈 페이지 하나를 얻어 그 커널 가상 주소를 반환함.
+   PAL_USER가 설정되어 있으면 user pool에서, 그렇지 않으면
+   kernel pool에서 페이지를 얻음.  FLAGS에 PAL_ZERO가 설정되어
+   있으면 페이지를 0으로 채움.  사용 가능한 페이지가 없으면
+   null 포인터를 반환하지만, FLAGS에 PAL_ASSERT가 설정되어 있으면
+   커널이 panic함. */
 void *
 palloc_get_page (enum palloc_flags flags) {
 	return palloc_get_multiple (flags, 1);
 }
 
-/* Frees the PAGE_CNT pages starting at PAGES. */
+/* PAGES부터 시작하는 PAGE_CNT개의 페이지를 해제함. */
 void
 palloc_free_multiple (void *pages, size_t page_cnt) {
 	struct pool *pool;
@@ -322,18 +321,18 @@ palloc_free_multiple (void *pages, size_t page_cnt) {
 	bitmap_set_multiple (pool->used_map, page_idx, page_cnt, false);
 }
 
-/* Frees the page at PAGE. */
+/* PAGE의 페이지를 해제함. */
 void
 palloc_free_page (void *page) {
 	palloc_free_multiple (page, 1);
 }
 
-/* Initializes pool P as starting at START and ending at END */
+/* pool P를 START에서 시작해 END에서 끝나도록 초기화함. */
 static void
 init_pool (struct pool *p, void **bm_base, uint64_t start, uint64_t end) {
-  /* We'll put the pool's used_map at its base.
-     Calculate the space needed for the bitmap
-     and subtract it from the pool's size. */
+  /* pool의 used_map을 pool의 시작 부분에 둘 것임.
+     bitmap에 필요한 공간을 계산하여
+     pool의 크기에서 뺌. */
 	uint64_t pgcnt = (end - start) / PGSIZE;
 	size_t bm_pages = DIV_ROUND_UP (bitmap_buf_size (pgcnt), PGSIZE) * PGSIZE;
 
@@ -341,14 +340,14 @@ init_pool (struct pool *p, void **bm_base, uint64_t start, uint64_t end) {
 	p->used_map = bitmap_create_in_buf (pgcnt, *bm_base, bm_pages);
 	p->base = (void *) start;
 
-	// Mark all to unusable.
+	// 모두 사용 불가로 표시함.
 	bitmap_set_all(p->used_map, true);
 
 	*bm_base += bm_pages;
 }
 
-/* Returns true if PAGE was allocated from POOL,
-   false otherwise. */
+/* PAGE가 POOL에서 할당된 것이면 true를,
+   그렇지 않으면 false를 반환함. */
 static bool
 page_from_pool (const struct pool *pool, void *page) {
 	size_t page_no = pg_no (page);

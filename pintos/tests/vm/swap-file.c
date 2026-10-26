@@ -1,8 +1,7 @@
-/* Checks if file-mapped pages 
- * are properly swapped out and swapped in 
- * For this test, Pintos memory size is 128MB 
- * First, fills the memory with with anonymous pages
- * and then tries to map a file into the page */
+/* 파일 매핑 page가 swap out 및 swap in 되는 과정이 올바른지 확인함
+ * 이 테스트에서 Pintos 메모리 크기는 128MB임
+ * 먼저 메모리를 anonymous page로 가득 채운 뒤,
+ * page에 파일을 매핑하려고 시도함 */
 
 #include <string.h>
 #include <syscall.h>
@@ -20,15 +19,15 @@ test_main (void)
     void *map;
     size_t i;
 
-    /* Map a page to a file */
+    /* page를 파일에 매핑함. */
     CHECK ((handle = open ("large.txt")) > 1, "open \"large.txt\"");
     CHECK ((map = mmap (actual, sizeof(large), 0, handle, 0)) != MAP_FAILED, "mmap \"large.txt\"");
 
-    /* Check that data is correct. */
+    /* 데이터가 올바른지 확인함. */
     if (memcmp (actual, large, strlen (large)))
         fail ("read of mmap'd file reported bad data");
 
-    /* Verify that data is followed by zeros. */
+    /* 데이터 뒤가 0으로 채워져 있는지 검증함. */
     size_t len = strlen(large);
     size_t page_end;
     for(page_end = 0; page_end < len; page_end+=4096);
@@ -40,7 +39,7 @@ test_main (void)
         }
     }
 
-    /* Unmap and close opend file */ 
+    /* 열어 둔 파일을 unmap하고 닫음. */ 
     munmap (map);
     close (handle);
 }

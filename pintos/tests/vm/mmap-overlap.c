@@ -1,4 +1,4 @@
-/* Verifies that overlapping memory mappings are disallowed. */
+/* 겹치는 메모리 매핑이 허용되지 않음을 검증함. */
 
 #include <syscall.h>
 #include "tests/vm/sample.inc"

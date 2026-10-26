@@ -1,6 +1,6 @@
-/* Reads a 128 kB file into static data and "sorts" the bytes in
-   it, using counting sort, a single-pass algorithm.  The sorted
-   data is written back to the same file in-place. */
+/* 128 kB 파일을 정적 데이터로 읽어 들이고, 한 번의 패스로 끝나는
+   알고리즘인 카운팅 정렬로 그 안의 바이트를 "정렬"함.
+   정렬된 데이터는 같은 파일에 제자리(in-place)로 다시 기록됨. */
 
 #include <debug.h>
 #include <syscall.h>
