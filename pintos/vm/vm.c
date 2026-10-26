@@ -180,7 +180,7 @@ vm_do_claim_page (struct page *page) {
 
 unsigned page_hash_func (const struct hash_elem *e, void *aux UNUSED){
 	struct page *p = hash_entry(e, struct page, hash_elem);
-	return hash_bytes(p->va, sizeof p->va);
+	return hash_bytes(&p->va, sizeof p->va);
 }
 bool page_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
 	struct page *a_page = hash_entry(a, struct page, hash_elem);
