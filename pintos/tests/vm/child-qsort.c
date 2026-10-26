@@ -1,7 +1,6 @@
-/* Reads a 128 kB file onto the stack and "sorts" the bytes in
-   it, using quick sort, a multi-pass divide and conquer
-   algorithm.  The sorted data is written back to the same file
-   in-place. */
+/* 128 kB 파일을 stack으로 읽어 들이고, 여러 번의 패스를 거치는
+   분할 정복 알고리즘인 퀵 정렬로 그 안의 바이트를 "정렬"함.
+   정렬된 데이터는 같은 파일에 제자리(in-place)로 다시 기록됨. */
 
 #include <debug.h>
 #include <syscall.h>
