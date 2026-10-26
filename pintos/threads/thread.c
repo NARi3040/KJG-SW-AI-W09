@@ -699,7 +699,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	list_init(&t->donations);
 
-	/* user program */
+	/* 유저 프로그램 */
 	list_init(&t->children);
 
 	t->magic = THREAD_MAGIC;
