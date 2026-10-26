@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/vaddr.h"
 
 /* 각 서브시스템의 초기화 코드를 호출하여 가상 메모리 서브시스템을
  * 초기화함. */
@@ -62,21 +63,19 @@ err:
 
 /* spt에서 VA를 찾아 페이지를 반환함. 오류 시 NULL을 반환함. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: 이 함수를 채울 것. */
-
-	return page;
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	struct page key;
+	key.va = pg_round_down (va);
+	struct hash_elem *e = hash_find (&spt->spt_hash, &key.hash_elem);
+	return e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
 }
 
 /* 유효성 검사를 거쳐 PAGE를 spt에 삽입함. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
-	/* TODO: 이 함수를 채울 것. */
-
-	return succ;
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
+	/* hash_insert는 같은 va가 이미 있으면 넣지 않고 기존 원소를 돌려줌 */
+	return hash_insert (&spt->spt_hash, &page->hash_elem) == NULL;
 }
 
 void
@@ -171,9 +170,25 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
+/* spt 해시 키: 페이지 시작 주소. */
+static uint64_t
+page_hash (const struct hash_elem *e, void *aux UNUSED) {
+	const struct page *p = hash_entry (e, struct page, hash_elem);
+	return hash_bytes (&p->va, sizeof p->va);
+}
+
+/* 같은 버킷 안에서 va 순서를 가림. */
+static bool
+page_less (const struct hash_elem *a, const struct hash_elem *b,
+		void *aux UNUSED) {
+	return hash_entry (a, struct page, hash_elem)->va
+		< hash_entry (b, struct page, hash_elem)->va;
+}
+
 /* 새 supplemental page table을 초기화함. */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init (&spt->spt_hash, page_hash, page_less, NULL);
 }
 
 /* supplemental page table을 SRC에서 DST로 복사함. */
