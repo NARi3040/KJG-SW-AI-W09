@@ -191,9 +191,8 @@ vm_do_claim_page (struct page *page) {
 /* 새 supplemental page table을 초기화함. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	if (hash_init(&spt->pages, page_hash, page_less, NULL) == false) {
-		PANIC ("failed to init hash");
-	}
+	bool ok = hash_init(&spt->pages, page_hash, page_less, NULL);
+	ASSERT (ok);
 }
 
 /* supplemental page table을 SRC에서 DST로 복사함. */
