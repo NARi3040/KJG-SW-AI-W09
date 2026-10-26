@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
 
 enum vm_type {
 	/* 초기화되지 않은 페이지 */
@@ -46,7 +47,9 @@ struct page {
 	void *va;              /* 유저 공간 기준의 주소 */
 	struct frame *frame;   /* frame에 대한 역참조 */
 
-	/* Your implementation (직접 구현할 부분) */
+	/* Your implementation */
+	struct hash_elem hash_elem; //page가 hash 내부 요소로 사용되므로 hash_elem 추가
+
 
 	/* 타입별 데이터는 union에 묶여 있음.
 	 * 각 함수는 현재 union을 자동으로 판별함. */
