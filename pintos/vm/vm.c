@@ -1,8 +1,26 @@
 /* vm.c: 가상 메모리 객체를 위한 범용 인터페이스. */
 
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+
+/* Returns a hash value for page p. */
+static unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED) {
+  const struct page *p = hash_entry (p_, struct page, hash_elem);
+  return hash_bytes (&p->va, sizeof p->va);
+}
+
+/* Returns true if page a precedes page b. */
+static bool
+page_less (const struct hash_elem *a_,
+           const struct hash_elem *b_, void *aux UNUSED) {
+  const struct page *a = hash_entry (a_, struct page, hash_elem);
+  const struct page *b = hash_entry (b_, struct page, hash_elem);
+
+  return a->va < b->va;
+}
 
 /* 각 서브시스템의 초기화 코드를 호출하여 가상 메모리 서브시스템을
  * 초기화함. */
@@ -44,7 +62,7 @@ bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+	ASSERT (VM_TYPE(type) != VM_UNINIT);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
@@ -62,21 +80,20 @@ err:
 
 /* spt에서 VA를 찾아 페이지를 반환함. 오류 시 NULL을 반환함. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: 이 함수를 채울 것. */
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	struct page p;
+	struct hash_elem *e;
 
-	return page;
+	p.va = pg_round_down(va);
+	e = hash_find (&spt->pages, &p.hash_elem);
+	return e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
 }
 
 /* 유효성 검사를 거쳐 PAGE를 spt에 삽입함. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
-	int succ = false;
-	/* TODO: 이 함수를 채울 것. */
-
-	return succ;
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
+	return hash_insert (&spt->pages, &page->hash_elem) == NULL;
 }
 
 void
@@ -173,7 +190,10 @@ vm_do_claim_page (struct page *page) {
 
 /* 새 supplemental page table을 초기화함. */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	if (hash_init(&spt->pages, page_hash, page_less, NULL) == false) {
+		PANIC ("failed to init hash");
+	}
 }
 
 /* supplemental page table을 SRC에서 DST로 복사함. */
