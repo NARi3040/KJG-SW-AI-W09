@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 
 /* 각 서브시스템의 초기화 코드를 호출하여 가상 메모리 서브시스템을
  * 초기화함. */
@@ -35,7 +36,8 @@ page_get_type (struct page *page) {
 
 /* Helpers */
 static struct frame *vm_get_victim (void);
-static bool vm_do_claim_page (struct page *page);
+static bool vm_do_claim_page(struct page *page);
+static void vm_clear_frame(struct frame *frame, struct page *page);
 static struct frame *vm_evict_frame (void);
 
 /* 초기화 함수(initializer)와 함께 대기 중(pending)인 페이지 객체를 생성함.
@@ -117,8 +119,21 @@ vm_evict_frame (void) {
  * 확보함. */
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: 이 함수를 채울 것. */
+	void *kva = palloc_get_page (PAL_USER);
+
+	if (kva == NULL) {
+		PANIC ("todo");
+	}
+
+	struct frame *frame = malloc (sizeof (struct frame));
+
+	if (frame == NULL) {
+		palloc_free_page (kva);
+		PANIC ("failed to allocate frame");
+	}
+
+	frame->kva = kva;
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -157,9 +172,16 @@ vm_dealloc_page (struct page *page) {
 
 /* VA에 할당된 페이지를 claim함. */
 bool
-vm_claim_page (void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: 이 함수를 채울 것. */
+vm_claim_page (void *va) {
+	struct page *page = spt_find_page (&thread_current ()->spt, va);
+
+	if (page == NULL) {
+		return false;
+	}
+
+	if (page->frame != NULL) {
+		return true;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -173,9 +195,35 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: 페이지의 VA를 frame의 PA에 매핑하는 page table entry를 삽입할 것. */
+	bool mapped = pml4_set_page (
+		thread_current ()->pml4,
+		page->va,
+		frame->kva,
+		page->writable
+	);
 
-	return swap_in (page, frame->kva);
+	if (!mapped) {
+        vm_clear_frame(frame, page);
+		return false;
+	}
+
+	bool swapped = swap_in (page, frame->kva);
+
+	if (!swapped) {
+        pml4_clear_page(thread_current()->pml4, page->va);
+        vm_clear_frame(frame, page);
+        return false;
+	}
+
+	return true;
+}
+
+void vm_clear_frame(struct frame *frame, struct page *page)
+{
+    frame->page = NULL;
+    page->frame = NULL;
+    palloc_free_page(frame->kva);
+    free(frame);
 }
 
 unsigned page_hash_func (const struct hash_elem *e, void *aux UNUSED){
