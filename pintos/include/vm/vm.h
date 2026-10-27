@@ -49,6 +49,7 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem; //page가 hash 내부 요소로 사용되므로 hash_elem 추가
+	bool writable;              // claim 시 pml4 매핑 권한으로 씀
 
 
 	/* 타입별 데이터는 union에 묶여 있음.
