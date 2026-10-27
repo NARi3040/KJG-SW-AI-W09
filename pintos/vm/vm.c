@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 
 /* 각 서브시스템의 초기화 코드를 호출하여 가상 메모리 서브시스템을
  * 초기화함. */
@@ -63,7 +64,7 @@ err:
 
 /* spt에서 VA를 찾아 페이지를 반환함. 오류 시 NULL을 반환함. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 
 	struct page tmp;
@@ -77,8 +78,8 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 /* 유효성 검사를 거쳐 PAGE를 spt에 삽입함. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	int succ = false;
 	/* TODO: Fill this function. */
 	succ = hash_insert(&spt->pages, &page->hash_elem) == NULL;
@@ -118,11 +119,30 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
-	/* TODO: 이 함수를 채울 것. */
+	// palloc_get_page()로 user pool에서 새 물리 페이지를 받는다.	
+	void *kva = palloc_get_page(PAL_USER);
 
+	if(kva == NULL) PANIC("vm_get_frame: todo - evict"); //물리페이지 palloc 실패
+
+	// 성공하면 frame 구조체도 할당하고, 멤버를 초기화해서 돌려준다
+	frame = malloc(sizeof *frame);
+	if(frame == NULL) {
+		palloc_free_page(kva);
+		PANIC ("vm_get_frame: malloc failed"); //frame malloc 실패 
+	}
+	frame->kva = kva;
+	frame->page = NULL;
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+
 	return frame;
+}
+
+static void 
+vm_free_frame(struct frame *frame){
+	palloc_free_page(frame->kva); //실제로 할당받은 user pool 메모리
+	free(frame); //kernel poo의 frame 구조체 
 }
 
 /* 스택을 확장함. */
@@ -156,33 +176,45 @@ vm_dealloc_page (struct page *page) {
 }
 
 /* VA에 할당된 페이지를 claim함. */
+//page_fault시 가는 vm_try_handle_fault와 달리 유효한 접근인지 확인할 필요 없음 
 bool
-vm_claim_page (void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: 이 함수를 채울 것. */
-
+vm_claim_page (void *va) {
+	//주소로 장부에서 페이지를 찾은 뒤, 그 페이지로 claim 엔진을 부른다.
+	struct page *page = spt_find_page(&thread_current()->spt, va);
+	if(page == NULL) return false;
 	return vm_do_claim_page (page);
 }
 
 /* PAGE를 claim하고 mmu를 설정함. */
 static bool
 vm_do_claim_page (struct page *page) {
-	struct frame *frame = vm_get_frame ();
+	/* 
+		먼저 `vm_get_frame()`으로 frame을 받는다. (템플릿에 이미 있음)
+		그다음 MMU를 설정한다. page table에 가상 주소 → 물리 주소 매핑을 추가한다.
+		반환값은 성공 여부(true/false)다.
+	*/
+	struct frame *frame = vm_get_frame (); //지금은 실패하면 내부에서 panic나고 끝남
 
+	/* TODO: 페이지의 VA를 frame의 PA에 매핑하는 page table entry를 삽입할 것. */
+	bool succ = pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable);
+	if(!succ){
+		vm_free_frame(frame);
+		return false;
+	}
+	
 	/* 링크를 설정함. */
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: 페이지의 VA를 frame의 PA에 매핑하는 page table entry를 삽입할 것. */
-
-	return swap_in (page, frame->kva);
+	//swap_in:메모리 안으로 데이터를 가져오는 일 전체
+	return swap_in (page, frame->kva); //실패하면 false -> 프로세스 exit됨 
 }
 
-unsigned page_hash_func (const struct hash_elem *e, void *aux UNUSED){
+static unsigned page_hash_func (const struct hash_elem *e, void *aux UNUSED){
 	struct page *p = hash_entry(e, struct page, hash_elem);
 	return hash_bytes(&p->va, sizeof p->va);
 }
-bool page_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+static bool page_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
 	struct page *a_page = hash_entry(a, struct page, hash_elem);
 	struct page *b_page = hash_entry(b, struct page, hash_elem);
 	return a_page->va < b_page->va;
