@@ -836,7 +836,7 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	return true;
 }
 
-#ifndef VM
+//#ifndef VM
 /* 이 블록의 코드는 project 2 동안에만 사용됨.
  * project 2 전체에 걸쳐 쓸 함수를 구현하려면 #ifndef 매크로
  * 바깥에 구현할 것. */
@@ -934,7 +934,7 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-#else
+//#else
 /* 여기서부터의 코드는 project 3 이후에 사용됨.
  * project 2 전용 함수를 구현하려면 위쪽 블록에 구현할 것. */
 
@@ -973,15 +973,27 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: lazy_load_segment에 정보를 넘기기 위해 aux를 설정할 것. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		struct lazy_load_page_info *aux = malloc(sizeof *aux);
+		if(aux == NULL) return false;
+		aux->file = file;
+		aux->page_read_bytes = page_read_bytes;
+		aux->page_zero_bytes = page_zero_bytes;
+		aux->file_ofs = ofs;
+		/* ofs 파라미터: 처음엔 세그먼트가 파일에서 시작하는 위치.
+		 * 루프마다 앞 페이지가 읽은 바이트(page_read_bytes)를 더해 가므로,
+ 		 * 루프 안에서는 "현재 페이지 내용이 파일에서 시작하는 위치"를 뜻하게 된다 */	
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, aux)){
+			free(aux);
 			return false;
+		}
 
 		/* 다음으로 넘어감. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes; //바이트 누적 
+
 	}
 	return true;
 }
@@ -995,8 +1007,15 @@ setup_stack (struct intr_frame *if_) {
 	/* TODO: stack_bottom에 스택을 매핑하고 즉시 해당 페이지를 claim할 것.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정할 것.
 	 * TODO: 해당 페이지가 스택임을 표시해야 함. */
-	/* TODO: 여기에 코드를 작성할 것 */
 
-	return success;
+	 //VM_ANON | VM_MARKER_0 -> 스택이라는 의미로 사용
+	success = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL); //페이지 만들고 spt에 등록
+	if(!success) return false;
+
+	success = vm_claim_page(stack_bottom); //프레임 받아서 pml4에 연결
+	if(!success) return false;
+
+	if_->rsp = USER_STACK;
+	return true;
 }
-#endif /* VM */
+//#endif /* VM */

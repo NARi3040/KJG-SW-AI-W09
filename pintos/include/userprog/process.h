@@ -48,4 +48,10 @@ struct child_info {
     struct list_elem elem;        /* 부모의 children 리스트 원소 */
 };
 
+struct lazy_load_page_info {
+    struct file *file;
+    off_t file_ofs;
+    size_t page_read_bytes;
+    size_t page_zero_bytes;
+};
 #endif /* userprog/process.h */
