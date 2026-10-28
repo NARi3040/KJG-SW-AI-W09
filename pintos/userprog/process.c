@@ -938,11 +938,21 @@ install_page (void *upage, void *kpage, bool writable) {
 /* 여기서부터의 코드는 project 3 이후에 사용됨.
  * project 2 전용 함수를 구현하려면 위쪽 블록에 구현할 것. */
 
+/* lazy_load_segment에 정보를 넘기기 위한 aux.
+ * load_segment에서 lazy_load_segment로 전달됨. */
+struct lazy_load_info {
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 로드할 것 */
 	/* TODO: 주소 VA에서 첫 페이지 폴트(page fault)가 발생하면 이 함수가 호출됨. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있음. */
+	free (aux);	// TODO: return 하기 전에 메모리 해제
 }
 
 /* FILE의 오프셋 OFS에서 시작하는 세그먼트를 주소 UPAGE에 로드함.
@@ -972,16 +982,27 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: lazy_load_segment에 정보를 넘기기 위해 aux를 설정할 것. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		struct lazy_load_info *aux = malloc (sizeof *aux);
+		if (aux == NULL) {
 			return false;
+		}
+
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+					writable, lazy_load_segment, aux)) {
+			free (aux);
+			return false;
+		}
 
 		/* 다음으로 넘어감. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -992,10 +1013,14 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/* TODO: stack_bottom에 스택을 매핑하고 즉시 해당 페이지를 claim할 것.
-	 * TODO: 성공하면 rsp를 그에 맞게 설정할 것.
-	 * TODO: 해당 페이지가 스택임을 표시해야 함. */
-	/* TODO: 여기에 코드를 작성할 것 */
+	/* 페이지 등록 */
+	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
+		/*  */
+		if (vm_claim_page (stack_bottom)) {
+			if_->rsp = USER_STACK;
+			return true;
+		}
+	}
 
 	return success;
 }
