@@ -836,7 +836,7 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	return true;
 }
 
-//#ifndef VM
+#ifndef VM
 /* 이 블록의 코드는 project 2 동안에만 사용됨.
  * project 2 전체에 걸쳐 쓸 함수를 구현하려면 #ifndef 매크로
  * 바깥에 구현할 것. */
@@ -934,7 +934,7 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-//#else
+#else
 /* 여기서부터의 코드는 project 3 이후에 사용됨.
  * project 2 전용 함수를 구현하려면 위쪽 블록에 구현할 것. */
 
@@ -1018,4 +1018,4 @@ setup_stack (struct intr_frame *if_) {
 	if_->rsp = USER_STACK;
 	return true;
 }
-//#endif /* VM */
+#endif /* VM */
