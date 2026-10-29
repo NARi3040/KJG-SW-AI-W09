@@ -951,37 +951,21 @@ struct load_aux {
 	size_t zero_bytes;
 };
 
-/* 세그먼트 앞부분을 파일에서 정확히 read_bytes만큼 읽음. 덜 읽으면 false. */
-static bool
-read_segment_bytes (const struct load_aux *la, void *kva) {
-
-	bool held = lock_held_by_current_thread (&filesys_lock); //<- 없어도 됨
-
-	if (!held) 
-		lock_acquire (&filesys_lock);
-	
-	off_t got = file_read_at (la->file, kva, la->read_bytes, la->ofs);
-
-	if (!held)
-		lock_release (&filesys_lock);
-	
-	return got == (off_t) la->read_bytes;
-}
-
-/* 파일에서 읽고 남은 페이지 뒷부분(.bss 등)을 0으로 채움. */
-static void
-zero_segment_tail (const struct load_aux *la, uint8_t *kva) {
-	memset (kva + la->read_bytes, 0, la->zero_bytes);
-}
-
+/* 첫 페이지 폴트 시 실행 파일 내용을 프레임에 읽고 나머지 영역을 0으로 채움.
+ * aux는 uninit_initialize()가 해제함. fork는 부모 aux로 이 함수를 다시 부르므로 여기서 해제하면 안 됨. */
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	const struct load_aux *la = aux;
+	struct load_aux *info = aux;
 	uint8_t *kva = page->frame->kva;
 
-	if (!read_segment_bytes (la, kva))
+	lock_acquire (&filesys_lock);
+	if (file_read_at (info->file, kva, info->read_bytes, info->ofs) != info->read_bytes) {
+		lock_release (&filesys_lock);
 		return false;
-	zero_segment_tail (la, kva);
+	}
+	lock_release (&filesys_lock);
+
+	memset (kva + info->read_bytes, 0, info->zero_bytes);
 	return true;
 }
 
@@ -1044,7 +1028,7 @@ setup_stack (struct intr_frame *if_) {
 
 	/* 
 	spt에 저장 후 프레임을 얻고
-	가상 주소와 연결해 페이지 테이블에 적고 is_user_page_writable
+	가상 주소와 연결해 페이지 테이블에 적고
 	uninit 페이지를 익명 페이지로 초기화  
 	*/
 	success = vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true) && vm_claim_page (stack_bottom);

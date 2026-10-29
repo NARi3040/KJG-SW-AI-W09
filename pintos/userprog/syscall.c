@@ -103,85 +103,68 @@ void sys_exit (int status) {
 	thread_exit ();
 }
 
-/* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함. */
-static bool is_user_page_present(const void *addr) {
-#ifdef VM // 여기만 보세요
-	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL;
-#else
-	return pml4_get_page(thread_current()->pml4, addr) != NULL;
-#endif
-}
-
-/* VM 빌드는 SPT의 writable을 봄. lazy 페이지는 PTE가 없어 pml4e_walk()가 NULL을 돌려주고,
- * 이를 is_writable()로 역참조하면 커널 패닉이 나기 때문임. */
-static bool is_user_page_writable(const void *addr) {
-#ifdef VM // 여기만 보세요
-	struct page *page = spt_find_page(&thread_current()->spt, (void *)addr);
-	return page != NULL && page->writable;
-#else
-	return is_writable(pml4e_walk(thread_current()->pml4, (uint64_t)addr, false));
-#endif
-}
-
 /**
- * @brief 유저가 넘긴 주소 ADDR 하나가 접근 가능한 유저 페이지인지 검사함
+ * @brief 유저 주소 ADDR이 현재 프로세스의 SPT에 등록된 페이지인지 검사함
  *
  * @details
  * 세 가지를 차례로 봄.
  * 1. NULL이 아님
  * 2. 유저 영역 주소임(is_user_vaddr). 커널 주소를 넘겨 커널 메모리를 읽거나 쓰는 것을 막음
- * 3. 현재 프로세스의 페이지 테이블에 실제로 매핑되어 있음(pml4_get_page).
- *    VM 빌드에서는 lazy 페이지를 허용하려고 SPT에 등록되어 있는지(spt_find_page)로 봄
+ * 3. 현재 프로세스의 SPT에 해당 주소의 페이지가 등록되어 있음
  *
  * 하나라도 어기면 커널이 그 주소를 건드리기 전에 sys_exit(-1)로 프로세스를 끝냄.
- * page fault가 난 뒤 수습하는 방식 대신 "먼저 검사하고 쓰는" 방식을 택함.
- * 검사 위치가 시스템 콜 입구로 모여 있어서 흐름을 따라가기 쉽기 때문임.
+ * PML4 매핑 여부는 검사하지 않으므로 아직 메모리에 올라오지 않은 lazy 페이지도 허용함.
+ * 검증 과정에서는 페이지를 로드하지 않으며, 실제 접근 시 필요한 로드는 page fault로 처리함.
  *
  * @param[in] addr 검사할 유저 가상 주소
  *
  * @note 이 주소가 속한 한 페이지만 봄. 여러 페이지에 걸친 버퍼는 check_buffer(),
  *       문자열은 copy_name()을 씀
+ * @note VM 빌드용 검사이며, 쓰기 권한은 check_buffer()에서 별도로 검사함
  */
 void check_address(const void *addr) {
-	if (addr == NULL || !is_user_vaddr(addr) || !is_user_page_present(addr)) {
-		sys_exit(-1);
-	}
-}
-
-/* 페이지 하나가 접근 가능한지, WRITE면 쓰기 권한까지 검사함. */
-static void check_user_page(const void *addr, bool write) {
-	check_address(addr);
-	if (write && !is_user_page_writable(addr)) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page (spt, addr) == NULL) {
 		sys_exit(-1);
 	}
 }
 
 /**
- * @brief 유저 버퍼 [buf, buf + size)가 걸친 모든 페이지를 검사함
+ * @brief 유저 버퍼 [buf, buf + size)의 페이지 등록 여부와 필요한 쓰기 권한을 검사함
  *
  * @details
- * read/write 버퍼는 시작 주소만 멀쩡하고 중간이나 끝이 매핑 안 된 페이지일 수 있음
- * (예: 스택 끝에 걸친 버퍼). 시작 주소만 보면 커널이 memcpy하다 page fault로 죽으므로,
- * 버퍼가 걸친 페이지마다 한 번씩 검사함. 바이트 단위가 아니라 페이지 단위로 도는 이유는
- * 매핑 여부가 페이지 단위로 정해지기 때문임.
+ * 버퍼의 시작 주소가 유효해도 중간이나 끝은 SPT에 등록되지 않은 페이지일 수 있으므로,
+ * 버퍼가 걸친 모든 페이지를 검사함. 각 페이지는 check_address()로 유효성을 확인한 뒤
+ * 필요한 쓰기 권한을 SPT의 writable 정보로 확인함.
  *
- * 커널이 쓸 버퍼(read)면 페이지의 쓰기 권한까지 봄. CR0.WP가 꺼져 있어서 커널이
- * 읽기 전용 유저 페이지(코드 영역)에 써도 page fault가 나지 않고 그대로 써지기 때문임.
+ * read는 커널이 유저 버퍼에 데이터를 쓰므로 쓰기 권한이 필요함.
+ * CR0.WP가 꺼진 환경에서는 커널의 읽기 전용 페이지 쓰기가 fault를 일으키지 않을 수 있어
+ * 접근 전에 권한을 명시적으로 검사함. 권한 검사는 PTE 대신 SPT를 사용하므로
+ * 아직 PML4에 매핑되지 않은 정상 lazy 페이지도 허용함.
  *
  * @param[in] buf 유저 버퍼 시작 주소
- * @param[in] size 버퍼 크기(바이트). 0이면 시작 주소만 검사함
+ * @param[in] size 버퍼 크기(바이트). 0이어도 시작 주소와 요청된 쓰기 권한은 검사함
  * @param[in] write 커널이 이 버퍼에 쓰면 true. 쓰기 권한 없는 페이지면 sys_exit(-1)
  *
  * @note 첫 페이지는 buf로, 그 뒤 페이지는 각 페이지의 시작 주소로 검사함.
+ * @note 검증 과정에서는 프레임 할당이나 PML4 매핑을 수행하지 않음
  */
 static void check_buffer(const void *buf, size_t size, bool write) {
-	check_user_page(buf, write);
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+
+	check_address(buf);
+	if (write && !spt_find_page (spt, buf)->writable) {
+		sys_exit(-1);
+	}
 	if (size == 0) {
 		return;
 	}
 	const char *end = (const char *)buf + size - 1;
 	for (const char *p = (const char *)pg_round_down(buf) + PGSIZE; p <= end; p += PGSIZE) {
-		check_user_page(p, write);
+		check_address(p);
+		if (write && !spt_find_page (spt, p)->writable) {
+			sys_exit(-1);
+		}
 	}
 }
 
