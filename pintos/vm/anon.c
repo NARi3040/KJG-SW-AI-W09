@@ -28,12 +28,12 @@ vm_anon_init (void) {
 
 /* anon 페이지를 초기화함. */
 bool
-anon_initializer (struct page *page, enum vm_type type, void *kva) {
+anon_initializer (struct page *page, enum vm_type type UNUSED, void *kva) {
 	/* 핸들러를 설정함. */
 	page->operations = &anon_ops;
 	/* 익명 메모리는 0으로 시작한다. 이전 프로세스의 데이터가 노출되지 않게 하고, init이 없는 페이지(스택 등)도 깨끗하게 시작하도록 함 */
 	memset(kva, 0, PGSIZE);
-	struct anon_page *anon_page = &page->anon;
+	struct anon_page *anon_page = &page->anon; //Swap 과제에서 멤버 초기화 예정
 	return true;
 }
 

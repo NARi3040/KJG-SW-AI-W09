@@ -90,10 +90,9 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 
 /* 유효성 검사를 거쳐 PAGE를 spt에 삽입함. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	int succ = false;
-	/* TODO: Fill this function. */
+
 	succ = hash_insert(&spt->pages, &page->hash_elem) == NULL;
 
 	return succ;
@@ -162,9 +161,8 @@ vm_handle_wp (struct page *page UNUSED) {
 }
 
 
-//해당 addr에 유효한 페이지가 없으면 NULL을 반환;
+/* addr에 유효한 페이지가 없으면 NULL을 반환 */
 static struct page* get_page_for_fault(void *addr, bool write, bool not_present){
-	/* TODO: fault가 유효한지 검증할 것. */
 	if(is_kernel_vaddr(addr) || !not_present) return NULL;
 	
 	struct supplemental_page_table *spt = &thread_current ()->spt;
@@ -178,7 +176,7 @@ static struct page* get_page_for_fault(void *addr, bool write, bool not_present)
 /* 성공하면 true를 반환함. */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
-		bool user, bool write, bool not_present) {
+		bool user UNUSED, bool write, bool not_present) {
 	struct page *page = get_page_for_fault(addr, write, not_present);
 	if(page == NULL) return false; //유효페이지 없음 
 	return vm_do_claim_page (page);

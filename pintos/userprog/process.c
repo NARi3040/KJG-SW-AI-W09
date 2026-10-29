@@ -954,15 +954,12 @@ load_page_from_file(void *kva, const struct load_aux *aux){
 	off_t bytes = file_read_at(aux->file, kva, read_bytes, aux->ofs);
 	if(bytes != (off_t)read_bytes) return false;
 
-	memset(kva + read_bytes, 0, aux->zero_bytes);
+	memset((uint8_t *)kva + read_bytes, 0, aux->zero_bytes);
 	return true;
 }
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/* TODO: 파일에서 세그먼트를 로드할 것 */
-	/* TODO: 주소 VA에서 첫 페이지 폴트(page fault)가 발생하면 이 함수가 호출됨. */
-	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있음. */
 	bool succ = load_page_from_file(page->frame->kva, aux);
 	free(aux);
 	return succ; 
@@ -995,16 +992,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		struct load_aux *aux = malloc (sizeof *aux); //어디서 해제해야 하는지 고민 필요! 
+		struct load_aux *aux = malloc (sizeof *aux); 
+		/* aux는 폴트 시 lazy_load_segment에서, 끝까지 폴트가 안 나면 uninit_destroy에서 해제 */
 		if (aux == NULL)
 			return false;
-		/*
-		aux->file = file;
-		aux->ofs = ofs;
-		aux->read_bytes = page_read_bytes;
-		aux->zero_bytes = page_zero_bytes;
-		*/
-		*aux = (struct load_aux) { file, ofs, page_read_bytes, page_zero_bytes };
+		*aux = (struct load_aux) { .file = file, .ofs = ofs, .read_bytes = page_read_bytes, .zero_bytes = page_zero_bytes};
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, aux)) {
 			free (aux);
 			return false;
