@@ -376,7 +376,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_EXIT:		/* exit(status) 첫 인자는 rdi로 전달 */
 			sys_exit((int)f->R.rdi);
 		case SYS_FORK:
-			f->R.rax = process_fork(f->R.rdi, f);
+			f->R.rax = process_fork((const char *)f->R.rdi, f);
 			break;
 		case SYS_EXEC: {
 			const char *cmd = (const char *)f->R.rdi;

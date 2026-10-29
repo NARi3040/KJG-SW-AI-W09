@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 
 /* 처리한 페이지 폴트(page fault)의 수. */
 static long long page_fault_cnt;

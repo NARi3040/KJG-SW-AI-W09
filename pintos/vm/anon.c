@@ -3,6 +3,8 @@
 #include "vm/vm.h"
 #include "devices/disk.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
+#include "threads/thread.h"
 #include <string.h>
 
 /* DO NOT MODIFY BELOW LINE. (아래 줄은 수정하지 말 것) */
@@ -49,8 +51,17 @@ anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 }
 
-/* anonymous page를 파괴함. PAGE는 호출자가 해제함. */
+/* anonymous page를 파괴함. */
 static void
 anon_destroy (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	struct anon_page *anon_page UNUSED = &page->anon;
+	struct frame *frame = page->frame;
+
+	if (frame == NULL) // 물리 프레임 없다면
+		return;
+
+	uint64_t *pml4 = thread_current()->pml4;
+	if (pml4 != NULL) // 페이지 테이블이 아직 살아 있다면
+		pml4_clear_page(pml4, page->va);
+	vm_free_frame(page, frame);
 }

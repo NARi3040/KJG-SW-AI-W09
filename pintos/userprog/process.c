@@ -360,6 +360,10 @@ process_exec (void *f_name) {
 
 	/* 먼저 현재 컨텍스트를 제거함 */
 	process_cleanup();
+#ifdef VM
+	/* kill이 해시 테이블까지 반납하므로 load가 새 페이지를 넣기 전에 다시 만듦 */
+	supplemental_page_table_init(&curr->spt);
+#endif
 
 	/* 이전 실행 파일은 더 이상 실행 중이 아니므로 닫아 deny-write를 풂.
 	 * load()가 using_file을 새 파일로 덮어쓰기 전에 닫아야 이전 파일이 새지 않음. */

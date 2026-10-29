@@ -63,13 +63,12 @@ uninit_initialize (struct page *page, void *kva) {
 	return succ;
 }
 
-/* uninit_page가 보유한 자원을 해제함. 대부분의 페이지는 다른 페이지 객체로
- * 변환되지만, 실행 중 한 번도 참조되지 않은 uninit 페이지가 프로세스
- * 종료 시점에 남아 있을 수 있음.
- * PAGE는 호출자가 해제함. */
+/* uninit_page가 보유한 자원을 해제함. */
 static void
 uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: 이 함수를 채울 것.
-	 * TODO: 할 일이 없다면 그냥 return할 것. */
+	struct uninit_page *uninit = &page->uninit;
+
+	/* 한 번도 접근되지 않아 남은 aux를 해제함. */
+	free(uninit->aux);
+	uninit->aux = NULL;
 }
