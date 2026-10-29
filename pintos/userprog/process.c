@@ -947,11 +947,24 @@ struct load_aux {
 	size_t zero_bytes;
 };
 
+/* 첫 페이지 폴트 시 실행 파일 내용을 프레임에 읽고 나머지 영역을 0으로 채움. */
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/* TODO: 파일에서 세그먼트를 로드할 것 */
-	/* TODO: 주소 VA에서 첫 페이지 폴트(page fault)가 발생하면 이 함수가 호출됨. */
-	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있음. */
+	struct load_aux *info = aux;
+	uint8_t *kva = page->frame->kva;
+
+	lock_acquire (&filesys_lock);
+	if (file_read_at (info->file, kva, info->read_bytes, info->ofs) != info->read_bytes) {
+		free (info);
+		lock_release (&filesys_lock);
+		return false;
+	}
+	lock_release (&filesys_lock);
+
+	memset (kva + info->read_bytes, 0, info->zero_bytes);
+
+	free (info);
+	return true;
 }
 
 /* FILE의 오프셋 OFS에서 시작하는 세그먼트를 주소 UPAGE에 로드함.
