@@ -76,7 +76,7 @@ err:
 
 /* spt에서 VA를 찾아 페이지를 반환함. 오류 시 NULL을 반환함. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 
 	struct page tmp;
@@ -163,13 +163,24 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* 성공하면 true를 반환함. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: fault가 유효한지 검증할 것. */
-	/* TODO: 여기에 코드를 작성할 것. */
+	/* TODO: fault가 유효한지 검증할 것. 
+		1. 폴트난 주소 addr: 유저영역 이어야 함 
+			- 커널주소면 lazy_loading 대상이 아님
+		2. not_present: true여야함
+			- false: 페이지 테이블에 연결은 있으나, 이번 접근이 권한을 어기는 상황
+		3. spt에 addr로 page가 있어야함: 나중에 채우겠다고 등록해 둔 곳
+		4. write == true인 경우, page의 writable이 true인지 확인	
+	*/
+	if(is_kernel_vaddr(addr) || !not_present) return false;
 
+	page = spt_find_page(spt, addr);
+	if(page == NULL) return false;
+	if(write && !page->writable) return false;
+	
 	return vm_do_claim_page (page);
 }
 
@@ -214,12 +225,12 @@ vm_do_claim_page (struct page *page) {
 	/* 링크를 설정함. */
 	frame->page = page;
 	page->frame = frame;
-
-	if (!pml4_set_page (pml4, page->va, frame->kva, page->writable)) {
+ 
+	if (!pml4_set_page (pml4, page->va, frame->kva, page->writable)) {//페이지 테이블에 등록 
 		vm_free_frame (page, frame);
 		return false;
 	}
-	if (!swap_in (page, frame->kva)) {
+	if (!swap_in (page, frame->kva)) { //프레임에 파일 내용 로드 
 		pml4_clear_page (pml4, page->va);
 		vm_free_frame (page, frame);
 		return false;

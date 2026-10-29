@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/vaddr.h"
 
 /* DO NOT MODIFY BELOW LINE. (아래 줄은 수정하지 말 것) */
 static struct disk *swap_disk;
@@ -24,13 +25,15 @@ vm_anon_init (void) {
 	swap_disk = NULL;
 }
 
-/* 파일 매핑을 초기화함. */
+/* anon 페이지를 초기화함. */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* 핸들러를 설정함. */
 	page->operations = &anon_ops;
-
+	/* 익명 메모리는 0으로 시작한다. 이전 프로세스의 데이터가 노출되지 않게 하고, init이 없는 페이지(스택 등)도 깨끗하게 시작하도록 함 */
+	memset(kva, 0, PGSIZE);
 	struct anon_page *anon_page = &page->anon;
+	return true;
 }
 
 /* swap disk에서 내용을 읽어 페이지를 swap in함. */

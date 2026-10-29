@@ -952,6 +952,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 로드할 것 */
 	/* TODO: 주소 VA에서 첫 페이지 폴트(page fault)가 발생하면 이 함수가 호출됨. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있음. */
+
 }
 
 /* FILE의 오프셋 OFS에서 시작하는 세그먼트를 주소 UPAGE에 로드함.
@@ -981,7 +982,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		struct load_aux *aux = malloc (sizeof *aux);
+		struct load_aux *aux = malloc (sizeof *aux); //어디서 해제해야 하는지 고민 필요! 
 		if (aux == NULL)
 			return false;
 		/*
