@@ -161,26 +161,26 @@ static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
 
-/* 성공하면 true를 반환함. */
-bool
-vm_try_handle_fault (struct intr_frame *f, void *addr,
-		bool user, bool write, bool not_present) {
+
+//해당 addr에 유효한 페이지가 없으면 NULL을 반환;
+static struct page* get_page_for_fault(void *addr, bool write, bool not_present){
+	/* TODO: fault가 유효한지 검증할 것. */
+	if(is_kernel_vaddr(addr) || !not_present) return NULL;
+	
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: fault가 유효한지 검증할 것. 
-		1. 폴트난 주소 addr: 유저영역 이어야 함 
-			- 커널주소면 lazy_loading 대상이 아님
-		2. not_present: true여야함
-			- false: 페이지 테이블에 연결은 있으나, 이번 접근이 권한을 어기는 상황
-		3. spt에 addr로 page가 있어야함: 나중에 채우겠다고 등록해 둔 곳
-		4. write == true인 경우, page의 writable이 true인지 확인	
-	*/
-	if(is_kernel_vaddr(addr) || !not_present) return false;
-
 	page = spt_find_page(spt, addr);
-	if(page == NULL) return false;
-	if(write && !page->writable) return false;
-	
+	if(page == NULL) return NULL;
+	if(write && !page->writable) return NULL;
+
+	return page;
+}
+/* 성공하면 true를 반환함. */
+bool
+vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
+		bool user, bool write, bool not_present) {
+	struct page *page = get_page_for_fault(addr, write, not_present);
+	if(page == NULL) return false; //유효페이지 없음 
 	return vm_do_claim_page (page);
 }
 

@@ -284,7 +284,7 @@ __do_fork (void *aux) {
 
 	/* TODO: 여기에 코드를 작성할 것.
 	 * TODO: 힌트) 파일 객체를 복제하려면 include/filesys/file.h의
-	 * TODO:       `file_duplicate`를 사용할 것. 이 함수가 부모의 리소스를
+	 * TODO:       file_duplicate를 사용할 것. 이 함수가 부모의 리소스를
 	 * TODO:       성공적으로 복제하기 전까지는 부모가 fork()에서 반환하면
 	 * TODO:       안 된다는 점에 주의할 것. */
 	fd_table_create();
@@ -667,7 +667,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	char *token, *save_ptr;
 	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL && argc < MAX_ARGS-1; token = strtok_r (NULL, " ", &save_ptr)) {
-		argv[argc++] = token;
+		argv[argc++] = token;  
 	}
 	argv[argc] = NULL;
 
@@ -947,12 +947,25 @@ struct load_aux {
 	size_t zero_bytes;
 };
 
+static bool 
+load_page_from_file(void *kva, const struct load_aux *aux){
+	size_t read_bytes = aux->read_bytes;
+
+	off_t bytes = file_read_at(aux->file, kva, read_bytes, aux->ofs);
+	if(bytes != (off_t)read_bytes) return false;
+
+	memset(kva + read_bytes, 0, aux->zero_bytes);
+	return true;
+}
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 로드할 것 */
 	/* TODO: 주소 VA에서 첫 페이지 폴트(page fault)가 발생하면 이 함수가 호출됨. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있음. */
-
+	bool succ = load_page_from_file(page->frame->kva, aux);
+	free(aux);
+	return succ; 
 }
 
 /* FILE의 오프셋 OFS에서 시작하는 세그먼트를 주소 UPAGE에 로드함.
