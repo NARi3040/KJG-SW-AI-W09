@@ -161,16 +161,30 @@ static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
 
+/* 유저 주소의 "페이지 없음" 폴트만 lazy loading 후보임. user 값은 안 봄 (시스템 콜 중 커널 모드 폴트도 처리) */
+static bool
+is_lazy_fault_candidate (void *addr, bool not_present) {
+	return addr != NULL && is_user_vaddr (addr) && not_present;
+}
+
+/* 폴트 주소의 SPT 페이지. 없거나 읽기 전용에 쓰려 하면 NULL (진짜 폴트). */
+static struct page *
+find_accessible_page (void *addr, bool write) {
+	struct page *page = spt_find_page (&thread_current ()->spt, addr);
+	if (page == NULL || (write && !page->writable))
+		return NULL;
+	return page;
+}
+
 /* 성공하면 true를 반환함. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
-	/* TODO: fault가 유효한지 검증할 것. */
-	/* TODO: 여기에 코드를 작성할 것. */
+vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
+		bool user UNUSED, bool write, bool not_present) {
+	if (!is_lazy_fault_candidate (addr, not_present))
+		return false;
 
-	return vm_do_claim_page (page);
+	struct page *page = find_accessible_page (addr, write);
+	return page != NULL && vm_do_claim_page (page);
 }
 
 /* 페이지를 해제함.

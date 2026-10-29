@@ -7,6 +7,7 @@
  * 함수에서 전달받은 초기화 콜백을 호출함.
  * */
 
+#include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/uninit.h"
 
@@ -41,18 +42,25 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 	};
 }
 
+/* 타입 변신. 실패해서 아직 uninit이면 aux를 비워 uninit_destroy가 같은 aux를 또 해제하지 않게 함. */
+static bool
+uninit_transform (struct page *page, void *kva) {
+	struct uninit_page *uninit = &page->uninit;
+	bool succ = uninit->page_initializer (page, uninit->type, kva);
+	if (!succ && VM_TYPE (page->operations->type) == VM_UNINIT)
+		uninit->aux = NULL;
+	return succ;
+}
+
 /* 첫 fault 시 페이지를 초기화함. */
 static bool
 uninit_initialize (struct page *page, void *kva) {
-	struct uninit_page *uninit = &page->uninit;
+	vm_initializer *init = page->uninit.init; /* 변신이 union을 덮어쓰기 전에 꺼냄 */
+	void *aux = page->uninit.aux;
 
-	/* 먼저 가져올 것. page_initialize가 값을 덮어쓸 수 있음. */
-	vm_initializer *init = uninit->init;
-	void *aux = uninit->aux;
-
-	/* TODO: 이 함수를 수정해야 할 수도 있음. */
-	return uninit->page_initializer (page, uninit->type, kva) &&
-		(init ? init (page, aux) : true);
+	bool succ = uninit_transform (page, kva) && (init == NULL || init (page, aux));
+	free (aux); /* 첫 접근 경로에서 aux를 해제하는 유일한 위치 */
+	return succ;
 }
 
 /* uninit_page가 보유한 자원을 해제함. 대부분의 페이지는 다른 페이지 객체로
