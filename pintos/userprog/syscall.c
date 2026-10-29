@@ -16,6 +16,9 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 #include "threads/init.h"
+#ifdef VM
+#include "vm/vm.h"
+#endif
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -121,10 +124,19 @@ void sys_exit (int status) {
  * @note 이 주소가 속한 한 페이지만 봄. 여러 페이지에 걸친 버퍼는 check_buffer(),
  *       문자열은 copy_name()을 씀
  */
+
 void check_address(const void *addr) {
-	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL) {
+	if (addr == NULL || !is_user_vaddr(addr))
 		sys_exit(-1);
-	}
+
+#ifdef VM
+	/* lazy load 전인 정상 페이지는 pml4에는 없고 SPT에만 있으므로 SPT로 확인함 */
+	if (spt_find_page(&thread_current()->spt, (void *) addr) == NULL)
+		sys_exit(-1);
+#else
+	if (pml4_get_page(thread_current()->pml4, addr) == NULL)
+		sys_exit(-1);
+#endif
 }
 
 /**
