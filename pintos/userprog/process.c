@@ -947,6 +947,7 @@ struct load_aux {
 	size_t zero_bytes;
 };
 
+/* 첫 페이지 폴트 시 실행 파일 내용을 프레임에 읽고 나머지 영역을 0으로 채움. */
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	struct load_aux *info = aux;
