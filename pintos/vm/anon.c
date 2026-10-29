@@ -2,6 +2,8 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/vaddr.h"
+#include <string.h>
 
 /* DO NOT MODIFY BELOW LINE. (아래 줄은 수정하지 말 것) */
 static struct disk *swap_disk;
@@ -31,6 +33,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	memset (kva, 0, PGSIZE); // evict로 재사용된 프레임은 PAL_ZERO가 적용 안 되므로 여기서도 채움
 }
 
 /* swap disk에서 내용을 읽어 페이지를 swap in함. */

@@ -129,7 +129,7 @@ vm_evict_frame (void) {
  * 확보함. */
 static struct frame *
 vm_get_frame (void) {
-	void *kva = palloc_get_page (PAL_USER);
+	void *kva = palloc_get_page (PAL_USER | PAL_ZERO); // 새 프레임 노출 방지, evict 재사용분은 anon_initializer가 따로 채움
 	if (kva == NULL)
 		PANIC ("todo"); // shortcut: 사용자 풀 고갈 시 패닉, swap 구현 시 vm_evict_frame으로 교체
 
