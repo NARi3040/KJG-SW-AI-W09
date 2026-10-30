@@ -267,16 +267,8 @@ destroy_pages (struct hash_elem *e, void *aux UNUSED) {
 	vm_dealloc_page (hash_entry (e, struct page, hash_elem));
 }
 
-/* 복사를 실패할 경우 DST의 supplemental page table를 정리함.
- * 정리는 supplemental_page_table_copy()의 호출자인 __do_fork() 에서 수행함. */
-void
-supplemental_page_table_copy_rollback (struct supplemental_page_table *spt) {
-	hash_clear (&spt->pages, destroy_pages);
-}
-
 static bool
-supplemental_page_table_uninit_copy (struct supplemental_page_table *dst,
-		struct page *src_page) {
+supplemental_page_table_uninit_copy (struct page *src_page) {
 	struct uninit_page *u = &src_page->uninit;
 
 	struct load_aux *aux = malloc (sizeof *aux);
@@ -343,7 +335,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 		switch (VM_TYPE (type)) {
 			case VM_UNINIT:
-				if (!supplemental_page_table_uninit_copy (dst, src_page))
+				if (!supplemental_page_table_uninit_copy (src_page))
 					return false;
 				break;
 			case VM_ANON:
@@ -351,6 +343,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 					return false;
 				break;
 			case VM_FILE:
+				// TODO: Memory Mapped Files 이후 구현할 것
 				return false;
 			default:
 				return false;

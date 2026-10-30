@@ -324,7 +324,6 @@ __do_fork (void *aux) {
 	}
 error:
 	current->self_info->fork_success = false;
-	supplemental_page_table_copy_rollback (&current->spt);
 	sema_up(&current->self_info->fork_sema);
 	thread_exit ();
 }

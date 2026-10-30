@@ -54,13 +54,9 @@ anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	if (page->frame != NULL) {
 		uint64_t *pml4 = thread_current ()->pml4;
-		
-		if (pml4 == NULL) {
-			return;
+		if (pml4 != NULL) {
+			pml4_clear_page (pml4, page->va);
 		}
-		
-		pml4_clear_page (pml4, page->va);
 		vm_free_frame (page, page->frame);
 	}
-
 }
