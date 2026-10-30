@@ -99,6 +99,7 @@ syscall_init (void) {
 // 예쁘당
 void
 syscall_handler (struct intr_frame *f) {
+	thread_current()->user_rsp = f->rsp;
 	switch (f->R.rax) {
 	case SYS_HALT:     handle_halt(f);     break;
 	case SYS_EXIT:     handle_exit(f);     break;
