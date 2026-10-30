@@ -9,9 +9,6 @@ struct file;
 extern struct lock filesys_lock;
 
 #define FD_MAX 64	/* fd 테이블 칸 수 */
-#define STDIN_FD 0
-#define STDOUT_FD 1
-#define FD_FIRST 2	/* fd 테이블에 쓰는 첫 fd (0, 1은 stdin/stdout) */
 
 void syscall_init (void);
 

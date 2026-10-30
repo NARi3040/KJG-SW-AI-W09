@@ -2,7 +2,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include "userprog/gdt.h"
-#include "userprog/syscall.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "intrinsic.h"
@@ -117,7 +116,7 @@ kill (struct intr_frame *f) {
  *   그 메시지를 찍고 부모의 wait도 -1을 받음
  *
  * 커널 모드 폴트는 그대로 kill()로 가서 PANIC함. 시스템 콜은 유저 포인터를 미리
- * 검사하므로(check_user_addr 등) 커널이 유저 주소에서 폴트를 내는 일은 버그임.
+ * 검사하므로(check_address 등) 커널이 유저 주소에서 폴트를 내는 일은 버그임.
  *
  * @param[in] f 폴트 당시의 인터럽트 프레임
  *
