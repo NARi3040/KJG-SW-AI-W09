@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/mmu.h"
 
 /* DO NOT MODIFY BELOW LINE. (아래 줄은 수정하지 말 것) */
 static struct disk *swap_disk;
@@ -51,4 +52,11 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	if (page->frame != NULL) {
+		uint64_t *pml4 = thread_current ()->pml4;
+		if (pml4 != NULL) {
+			pml4_clear_page (pml4, page->va);
+		}
+		vm_free_frame (page, page->frame);
+	}
 }

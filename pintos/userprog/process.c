@@ -273,14 +273,6 @@ __do_fork (void *aux) {
 		goto error;
 
 	process_activate (current);
-#ifdef VM
-	supplemental_page_table_init (&current->spt);
-	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
-		goto error;
-#else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
-		goto error;
-#endif
 
 	/* TODO: 여기에 코드를 작성할 것.
 	 * TODO: 힌트) 파일 객체를 복제하려면 include/filesys/file.h의
@@ -309,6 +301,17 @@ __do_fork (void *aux) {
 			goto error;
 	}
 
+/* uninit 타입인 경우 spt를 복사할 때 aux에 복제한 file이 필요.
+ * 따라서 file_duplicate() 이후 호출함.
+ * 만약 복사를 실패하면 error에서 해시를 정리함. */
+#ifdef VM
+	supplemental_page_table_init (&current->spt);
+	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
+		goto error;
+#else
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+		goto error;
+#endif
 
 	process_init ();
 
@@ -360,6 +363,11 @@ process_exec (void *f_name) {
 
 	/* 먼저 현재 컨텍스트를 제거함 */
 	process_cleanup();
+
+#ifdef VM
+	/* kill이 해시 테이블까지 반납하므로 load가 새 페이지를 넣기 전에 다시 만듦 */
+	supplemental_page_table_init(&curr->spt);
+#endif
 
 	/* 이전 실행 파일은 더 이상 실행 중이 아니므로 닫아 deny-write를 풂.
 	 * load()가 using_file을 새 파일로 덮어쓰기 전에 닫아야 이전 파일이 새지 않음. */
@@ -938,14 +946,6 @@ install_page (void *upage, void *kpage, bool writable) {
 #else
 /* 여기서부터의 코드는 project 3 이후에 사용됨.
  * project 2 전용 함수를 구현하려면 위쪽 블록에 구현할 것. */
-
-/* 페이지마다 하나씩 만들어 lazy_load_segment에 넘기는 로딩 정보. */
-struct load_aux {
-	struct file *file;
-	off_t ofs;
-	size_t read_bytes;
-	size_t zero_bytes;
-};
 
 /* 첫 페이지 폴트 시 실행 파일 내용을 프레임에 읽고 나머지 영역을 0으로 채움. */
 static bool

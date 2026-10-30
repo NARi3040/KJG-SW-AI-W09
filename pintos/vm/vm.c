@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include <string.h>
 
 /* 각 서브시스템의 초기화 코드를 호출하여 가상 메모리 서브시스템을
  * 초기화함. */
@@ -129,7 +130,7 @@ vm_evict_frame (void) {
  * 확보함. */
 static struct frame *
 vm_get_frame (void) {
-	void *kva = palloc_get_page (PAL_USER);
+	void *kva = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kva == NULL)
 		PANIC ("todo"); // shortcut: 사용자 풀 고갈 시 패닉, swap 구현 시 vm_evict_frame으로 교체
 
@@ -144,7 +145,7 @@ vm_get_frame (void) {
 }
 
 /* 양방향 연결을 끊고 프레임 기록과 물리 페이지를 반납함. (claim 실패 경로) */
-static void
+void
 vm_free_frame (struct page *page, struct frame *frame) {
 	page->frame = NULL;
 	palloc_free_page (frame->kva);
@@ -260,15 +261,100 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 	}
 }
 
+/* supplemental page table의 해시와 페이지를 정리함. */
+static void
+destroy_pages (struct hash_elem *e, void *aux UNUSED) {
+	vm_dealloc_page (hash_entry (e, struct page, hash_elem));
+}
+
+static bool
+supplemental_page_table_uninit_copy (struct page *src_page) {
+	struct uninit_page *u = &src_page->uninit;
+
+	struct load_aux *aux = malloc (sizeof *aux);
+	if (aux == NULL) {
+		return false;
+	}
+
+	*aux = *(struct load_aux *)u->aux;
+	aux->file = thread_current ()->using_file;
+
+	if (!vm_alloc_page_with_initializer (
+		u->type,
+		src_page->va,
+		src_page->writable,
+		u->init,
+		aux
+	)) {
+		free (aux);
+		return false;
+	}
+	return true;
+}
+
+static bool
+supplemental_page_table_anon_copy (struct supplemental_page_table *dst,
+		struct page *src_page) {
+	if (src_page->frame == NULL) {
+		return false;
+	}
+	if (!vm_alloc_page (VM_ANON, src_page->va, src_page->writable)) {
+		return false;
+	}
+	if (!vm_claim_page (src_page->va)) {
+		return false;
+	}
+	struct page *dst_page = spt_find_page (dst, src_page->va);
+	if (dst_page == NULL || dst_page->frame == NULL) {
+		return false;
+	}
+	memcpy (
+		dst_page->frame->kva,
+		src_page->frame->kva,
+		PGSIZE
+	);
+	return true;
+}
+
 /* supplemental page table을 SRC에서 DST로 복사함. */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	struct hash_iterator i;
+	
+	hash_first (&i, &src->pages);
+
+	while (hash_next (&i)) {
+		struct page *src_page = hash_entry (
+			hash_cur (&i),
+			struct page,
+			hash_elem
+		);
+
+		enum vm_type type = src_page->operations->type;
+
+		switch (VM_TYPE (type)) {
+			case VM_UNINIT:
+				if (!supplemental_page_table_uninit_copy (src_page))
+					return false;
+				break;
+			case VM_ANON:
+				if (!supplemental_page_table_anon_copy (dst, src_page))
+					return false;
+				break;
+			case VM_FILE:
+				// TODO: Memory Mapped Files 이후 구현할 것
+				return false;
+			default:
+				return false;
+		}
+	}
+
+	return true;
 }
 
 /* supplemental page table이 보유한 자원을 해제함. */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: 스레드가 보유한 supplemental_page_table을 모두 파괴하고,
-	 * TODO: 수정된 내용을 모두 저장소에 writeback할 것. */
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
+	hash_destroy (&spt->pages, destroy_pages);
 }
