@@ -115,6 +115,7 @@ void vm_init (void);
 void vm_free_frame (struct page *page, struct frame *frame);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
+bool vm_is_stack_access (const void *addr, uintptr_t rsp);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)

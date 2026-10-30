@@ -39,6 +39,9 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static uintptr_t fault_user_rsp (const struct intr_frame *f, bool user);
+static bool is_in_stack_range (const void *addr);
+static bool is_near_rsp (const void *addr, uintptr_t rsp);
 
 #define STACK_LIMIT (1 << 20) /* 스택 최대 크기 1 MB */
 
@@ -182,12 +185,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	struct page *page = spt_find_page (spt, addr);
 
 	if (page == NULL) {
-		/* 커널 모드 폴트의 f->rsp는 커널 스택이므로 시스템 콜 진입 때 저장한 값을 씀 */
-		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
-		uintptr_t va = (uintptr_t) addr;
-
-		/* USER_STACK 아래 1 MB 안이고, rsp 위이거나 PUSH가 쓰는 rsp - 8 자리여야 스택 접근 */
-		if (va < USER_STACK - STACK_LIMIT || va >= USER_STACK || va < rsp - 8)
+		if (!vm_is_stack_access (addr, fault_user_rsp (f, user)))
 			return false;
 		vm_stack_growth (addr);
 		page = spt_find_page (spt, addr);
@@ -200,6 +198,30 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	}
 
 	return vm_do_claim_page (page);
+}
+
+/* 커널 모드 폴트의 f->rsp는 커널 스택이므로 시스템 콜 진입 때 저장한 값을 씀. */
+static uintptr_t
+fault_user_rsp (const struct intr_frame *f, bool user) {
+	return user ? f->rsp : thread_current ()->user_rsp;
+}
+
+/* SPT에 없는 ADDR을 스택 확장으로 처리해도 되는가? (시스템 콜 버퍼 검증도 씀) */
+bool
+vm_is_stack_access (const void *addr, uintptr_t rsp) {
+	return is_in_stack_range (addr) && is_near_rsp (addr, rsp);
+}
+
+/* ADDR이 USER_STACK 아래 1 MB 안에 있는가? */
+static bool
+is_in_stack_range (const void *addr) {
+	return (uintptr_t) addr >= USER_STACK - STACK_LIMIT && (uintptr_t) addr < USER_STACK;
+}
+
+/* ADDR이 rsp 위이거나 PUSH가 쓰는 rsp - 8 자리인가? */
+static bool
+is_near_rsp (const void *addr, uintptr_t rsp) {
+	return (uintptr_t) addr >= rsp - 8;
 }
 
 /* 페이지를 해제함.
