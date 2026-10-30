@@ -93,8 +93,17 @@ struct supplemental_page_table {
 	struct hash pages;
 };
 
+/* 페이지마다 하나씩 만들어 lazy_load_segment 혹은 fork 대상에게 넘기는 로딩 정보. */
+struct load_aux {
+	struct file *file;
+	off_t ofs;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);
+void supplemental_page_table_copy_rollback (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
@@ -104,6 +113,7 @@ bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
 void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
+void vm_free_frame (struct page *page, struct frame *frame);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 
