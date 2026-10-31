@@ -383,10 +383,12 @@ static void check_user_addr(const void *addr) {
 	}
 }
 
-/* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함. */
+/* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함.
+ * 아직 안 자란 스택 자리도 허용함. 커널이 접근할 때 page fault가 스택을 키움. */
 static bool is_user_page_valid(const void *addr) {
 #ifdef VM
-	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL;
+	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL
+		|| vm_is_stack_access(addr, thread_current()->user_rsp);
 #else
 	return pml4_get_page(thread_current()->pml4, addr) != NULL;
 #endif
@@ -396,7 +398,9 @@ static bool is_user_page_valid(const void *addr) {
 static bool is_user_page_writable(const void *addr) {
 #ifdef VM
 	struct page *page = spt_find_page(&thread_current()->spt, (void *)addr);
-	return page != NULL && page->writable;
+	if (page == NULL)
+		return vm_is_stack_access(addr, thread_current()->user_rsp); /* 스택 페이지는 항상 쓰기 가능 */
+	return page->writable;
 #else
 	return is_writable(pml4e_walk(thread_current()->pml4, (uint64_t)addr, false));
 #endif
