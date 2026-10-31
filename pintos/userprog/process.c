@@ -623,6 +623,7 @@ struct ELF64_PHDR {
 #define Phdr ELF64_PHDR
 
 static bool setup_stack (struct intr_frame *if_);
+static bool args_fit_in_stack_page (char **argv, int argc);
 static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
@@ -680,6 +681,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	argv[argc] = NULL;
 
 	if (argc <= 0 || argc > MAX_ARGS) {
+		goto done;
+	}
+
+	if (!args_fit_in_stack_page (argv, argc)) {
 		goto done;
 	}
 
@@ -800,6 +805,18 @@ done:
 	return success;
 }
 
+/* 인자 문자열, 8바이트 정렬, argv 배열, 가짜 return address가 스택 첫 페이지에 다 들어가는가?
+ * 커널이 쌓다가 페이지를 넘기면 커널 모드 폴트로 패닉이 나므로 미리 막음. */
+static bool
+args_fit_in_stack_page (char **argv, int argc) {
+	size_t size = 0;
+	for (int i = 0; i < argc; i++) {
+		size += strlen (argv[i]) + 1;
+	}
+	size = (size + 7) & ~(size_t) 7; // 8바이트 정렬로 올림
+	size += (argc + 1) * sizeof (char *) + sizeof (void *);
+	return size <= PGSIZE;
+}
 
 /* PHDR이 FILE 안의 유효하고 로드 가능한 세그먼트를 기술하는지
  * 확인하여, 그렇다면 true를, 아니면 false를 반환함. */
