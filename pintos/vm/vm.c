@@ -162,7 +162,7 @@ vm_stack_growth (void *addr) {
 bool
 vm_stack_growth_available (const void *addr, uintptr_t rsp) {
 	uintptr_t va = (uintptr_t)addr;
-	return rsp >= 8 && va >= rsp - 8 && va >= MAX_STACK && va < USER_STACK;
+	return va >= rsp - 8 && va >= MAX_STACK && va < USER_STACK;
 }
 
 /* 쓰기 보호된(write_protected) 페이지에서 발생한 fault를 처리함. */
@@ -183,11 +183,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 
 	if (page == NULL) {
 		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
-		if (!vm_stack_growth_available(addr, rsp)) {
-			return false;
-		}
-		
-		if (!vm_stack_growth (addr)) {
+		if (!vm_stack_growth_available(addr, rsp) || !vm_stack_growth (addr)) {
 			return false;
 		}
 
