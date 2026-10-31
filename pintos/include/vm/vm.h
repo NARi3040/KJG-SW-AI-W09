@@ -124,5 +124,5 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
-struct page *vm_try_grow_stack(void *addr, uintptr_t rsp);
+bool vm_is_stack_access(void *addr, uintptr_t rsp);
 #endif  /* VM_VM_H */

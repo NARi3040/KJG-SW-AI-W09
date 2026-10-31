@@ -20,7 +20,6 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-
 /* 시스템 콜(System call).
  *
  * 예전에는 시스템 콜 서비스를 인터럽트 핸들러(interrupt handler)가 처리했음
@@ -388,13 +387,8 @@ static void check_user_addr(const void *addr) {
 /* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함. */
 static bool is_user_page_valid(const void *addr) {
 #ifdef VM
-	struct supplemental_page_table *spt = &thread_current ()->spt;
-	struct page *page = spt_find_page (spt, (void *)addr);
-	if (page == NULL) {
-		uintptr_t rsp = thread_current ()->user_rsp;
-		page = vm_try_grow_stack((void *)addr, rsp); //이 스택으로 등록된 page 포인터 반환 
-	}
-	return page != NULL;
+	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL 
+		|| vm_is_stack_access((void *)addr, thread_current()->user_rsp);
 #else
 	return pml4_get_page(thread_current()->pml4, addr) != NULL;
 #endif
@@ -404,7 +398,8 @@ static bool is_user_page_valid(const void *addr) {
 static bool is_user_page_writable(const void *addr) {
 #ifdef VM
 	struct page *page = spt_find_page(&thread_current()->spt, (void *)addr);
-	return page != NULL && page->writable;
+	if(page == NULL) return vm_is_stack_access((void *)addr, thread_current()->user_rsp); //스택은 항상 쓰기 가능 
+	return page->writable;
 #else
 	return is_writable(pml4e_walk(thread_current()->pml4, (uint64_t)addr, false));
 #endif

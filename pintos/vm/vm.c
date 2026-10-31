@@ -165,8 +165,8 @@ vm_stack_growth (void *addr) {
 	//결과는 나중에 spt_find_page로 확인해서 안 받아도 됨 
 }
 
-//스택 접근인지 확인
-static bool 
+//스택 접근인지 확인 
+bool 
 vm_is_stack_access(void *addr, uintptr_t rsp){
 	uintptr_t va = (uintptr_t)addr;
 	//스택 영역 체크 
@@ -176,14 +176,6 @@ vm_is_stack_access(void *addr, uintptr_t rsp){
 	if(va < rsp - 8) return false;
 
 	return true;
-}
-
-struct page *
-vm_try_grow_stack(void *addr, uintptr_t rsp){
-	if(!vm_is_stack_access(addr, rsp)) return NULL;
-    vm_stack_growth(addr);
-    struct page *page = spt_find_page(&thread_current()->spt, addr);
-	return page; //find 안되면 NULL 반환, 되면 spt에 있는 page 반환  
 }
 
 
@@ -203,8 +195,10 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 	struct page *page = spt_find_page (spt, addr);
 	if (page == NULL) {
 		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
-		page = vm_try_grow_stack(addr, rsp); //이 스택으로 등록된 page 포인터 반환 
-		if(page == NULL) return false; //스택 영역이 아니거나 spt 페이지 등록 실패 
+		if(!vm_is_stack_access(addr, rsp)) return false;
+		vm_stack_growth(addr);
+		page = spt_find_page(spt, addr);
+		if(page == NULL) return false; //spt 페이지 등록 실패 
 	}
 
 	if (write && !page->writable) {
