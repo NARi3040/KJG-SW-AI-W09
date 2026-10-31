@@ -173,7 +173,7 @@ vm_is_stack_access(void *addr, uintptr_t rsp){
 	if(va >= USER_STACK) return false;
 	if(va < USER_STACK - STACK_LIMIT_SIZE) return false;
 	//스택 접근 확인 
-	if(va < rsp && va != rsp - 8) return false;
+	if(va < rsp - 8) return false;
 
 	return true;
 }
