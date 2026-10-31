@@ -39,6 +39,10 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
+static bool is_in_stack_range (const void *addr);
+static bool is_not_below_push_limit (const void *addr, uintptr_t rsp);
+
+#define STACK_LIMIT (1 << 20) /* 스택 최대 크기 1 MB */
 
 /* 초기화 함수(initializer)와 함께 대기 중(pending)인 페이지 객체를 생성함.
  * 페이지를 만들고 싶다면 직접 생성하지 말고 이 함수 또는
@@ -154,7 +158,9 @@ vm_free_frame (struct page *page, struct frame *frame) {
 
 /* 스택을 확장함. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	/* 폴트 난 페이지만 예약함. 프레임은 vm_try_handle_fault가 이어서 붙임 */
+	vm_alloc_page (VM_ANON | VM_MARKER_0, pg_round_down (addr), true);
 }
 
 /* 쓰기 보호된(write_protected) 페이지에서 발생한 fault를 처리함. */
@@ -164,8 +170,8 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* 성공하면 true를 반환함. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
-		bool user UNUSED, bool write, bool not_present) {
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
 	if (!not_present) {
 		return false;
 	}
@@ -178,7 +184,14 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 	struct page *page = spt_find_page (spt, addr);
 
 	if (page == NULL) {
-		return false;
+		/* 커널 모드 폴트의 f->rsp는 커널 스택이므로 시스템 콜 진입 때 저장한 값을 씀 */
+		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
+		if (!vm_is_stack_access (addr, rsp))
+			return false;
+		vm_stack_growth (addr);
+		page = spt_find_page (spt, addr);
+		if (page == NULL)
+			return false;
 	}
 
 	if (write && !page->writable) {
@@ -186,6 +199,24 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 	}
 
 	return vm_do_claim_page (page);
+}
+
+/* SPT에 없는 ADDR을 스택 확장으로 처리해도 되는가? (시스템 콜 버퍼 검증도 씀) */
+bool
+vm_is_stack_access (const void *addr, uintptr_t rsp) {
+	return is_in_stack_range (addr) && is_not_below_push_limit (addr, rsp);
+}
+
+/* ADDR이 USER_STACK 아래 1 MB 안에 있는가? */
+static bool
+is_in_stack_range (const void *addr) {
+	return (uintptr_t) addr >= USER_STACK - STACK_LIMIT && (uintptr_t) addr < USER_STACK;
+}
+
+/* ADDR이 rsp 위이거나 PUSH가 쓰는 rsp - 8 자리인가? */
+static bool
+is_not_below_push_limit (const void *addr, uintptr_t rsp) {
+	return (uintptr_t) addr >= rsp - 8;
 }
 
 /* 페이지를 해제함.
