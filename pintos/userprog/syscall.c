@@ -16,6 +16,7 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 #include "threads/init.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -99,6 +100,8 @@ syscall_init (void) {
 // 예쁘당
 void
 syscall_handler (struct intr_frame *f) {
+	thread_current()->user_rsp = f->rsp;
+	
 	switch (f->R.rax) {
 	case SYS_HALT:     handle_halt(f);     break;
 	case SYS_EXIT:     handle_exit(f);     break;
@@ -385,7 +388,13 @@ static void check_user_addr(const void *addr) {
 /* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함. */
 static bool is_user_page_valid(const void *addr) {
 #ifdef VM
-	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL;
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct page *page = spt_find_page (spt, (void *)addr);
+	if (page == NULL) {
+		uintptr_t rsp = thread_current ()->user_rsp;
+		page = vm_try_grow_stack((void *)addr, rsp); //이 스택으로 등록된 page 포인터 반환 
+	}
+	return page != NULL;
 #else
 	return pml4_get_page(thread_current()->pml4, addr) != NULL;
 #endif

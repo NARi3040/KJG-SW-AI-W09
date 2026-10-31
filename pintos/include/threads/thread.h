@@ -126,6 +126,7 @@ struct thread {
 	struct exit_info *exit_info;	/* 내 종료 기록 주소 */
 	struct file **fd_table;		/* fd 테이블 (calloc, FD_MAX칸, 커널 스레드는 NULL) */
 	struct file *using_file ;	/* 실행 중인 실행 파일. deny-write를 건 채 종료 때 닫음 */
+	uintptr_t user_rsp;
 #endif
 #ifdef VM
 	/* 스레드가 소유한 전체 가상 메모리의 테이블. */

@@ -35,7 +35,10 @@
 #define KERN_BASE LOADER_KERN_BASE
 
 /* 유저 스택(user stack) 시작 */
-#define USER_STACK 0x47480000
+#define USER_STACK 0x47480000   
+
+/* 스택 최대 크기 1MB */
+#define STACK_LIMIT_SIZE  (1 << 20)           
 
 /* VADDR가 유저 가상 주소(user virtual address)이면 true를 반환함. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))

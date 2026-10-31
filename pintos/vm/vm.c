@@ -77,7 +77,7 @@ err:
 
 /* spt에서 VA를 찾아 페이지를 반환함. 오류 시 NULL을 반환함. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *page = NULL;
 
 	struct page tmp;
@@ -152,20 +152,45 @@ vm_free_frame (struct page *page, struct frame *frame) {
 	free (frame);
 }
 
-/* 스택을 확장함. */
-static void
-vm_stack_growth (void *addr UNUSED) {
-}
-
 /* 쓰기 보호된(write_protected) 페이지에서 발생한 fault를 처리함. */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
 
+/* 스택을 확장함. */
+static void
+vm_stack_growth (void *addr) {
+	addr = pg_round_down(addr);
+	vm_alloc_page(VM_ANON | VM_MARKER_0, addr, true); //initializer와 aux는 NULL
+	//결과는 나중에 spt_find_page로 확인해서 안 받아도 됨 
+}
+
+//스택 접근인지 확인
+static bool 
+vm_is_stack_access(void *addr, uintptr_t rsp){
+	uintptr_t va = (uintptr_t)addr;
+	//스택 영역 체크 
+	if(va >= USER_STACK) return false;
+	if(va < USER_STACK - STACK_LIMIT_SIZE) return false;
+	//스택 접근 확인 
+	if(va < rsp && va != rsp - 8) return false;
+
+	return true;
+}
+
+struct page *
+vm_try_grow_stack(void *addr, uintptr_t rsp){
+	if(!vm_is_stack_access(addr, rsp)) return NULL;
+    vm_stack_growth(addr);
+    struct page *page = spt_find_page(&thread_current()->spt, addr);
+	return page; //find 안되면 NULL 반환, 되면 spt에 있는 page 반환  
+}
+
+
 /* 성공하면 true를 반환함. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
-		bool user UNUSED, bool write, bool not_present) {
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
 	if (!not_present) {
 		return false;
 	}
@@ -176,9 +201,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = spt_find_page (spt, addr);
-
 	if (page == NULL) {
-		return false;
+		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
+		page = vm_try_grow_stack(addr, rsp); //이 스택으로 등록된 page 포인터 반환 
+		if(page == NULL) return false; //스택 영역이 아니거나 spt 페이지 등록 실패 
 	}
 
 	if (write && !page->writable) {
