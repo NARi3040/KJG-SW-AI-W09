@@ -153,8 +153,16 @@ vm_free_frame (struct page *page, struct frame *frame) {
 }
 
 /* 스택을 확장함. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+static bool
+vm_stack_growth (void *addr) {
+	void *va = pg_round_down (addr);
+	return vm_alloc_page (VM_ANON | VM_MARKER_0, va, true);
+}
+
+bool
+vm_stack_growth_available (const void *addr, uintptr_t rsp) {
+	uintptr_t va = (uintptr_t)addr;
+	return rsp >= 8 && addr >= rsp - 8 && addr >= MAX_STACK && addr < USER_STACK;
 }
 
 /* 쓰기 보호된(write_protected) 페이지에서 발생한 fault를 처리함. */
@@ -164,13 +172,9 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* 성공하면 true를 반환함. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
-		bool user UNUSED, bool write, bool not_present) {
-	if (!not_present) {
-		return false;
-	}
-
-	if (!is_user_vaddr (addr)) {
+vm_try_handle_fault (struct intr_frame *f, void *addr,
+		bool user, bool write, bool not_present) {
+	if (!not_present || !is_user_vaddr (addr)) {
 		return false;
 	}
 
@@ -178,7 +182,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 	struct page *page = spt_find_page (spt, addr);
 
 	if (page == NULL) {
-		return false;
+		uintptr_t rsp = user ? f->rsp : thread_current ()->user_rsp;
+		if (!vm_stack_growth_available(addr, rsp)) {
+			return false;
+		}
+		
+		if (!vm_stack_growth (addr)) {
+			return false;
+		}
+
+		page = spt_find_page (spt, addr);
+		if (page == NULL) {
+			return false;
+		}
 	}
 
 	if (write && !page->writable) {

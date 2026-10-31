@@ -99,6 +99,9 @@ syscall_init (void) {
 // 예쁘당
 void
 syscall_handler (struct intr_frame *f) {
+#ifdef VM
+	thread_current ()->user_rsp = f->rsp;
+#endif
 	switch (f->R.rax) {
 	case SYS_HALT:     handle_halt(f);     break;
 	case SYS_EXIT:     handle_exit(f);     break;
@@ -385,7 +388,8 @@ static void check_user_addr(const void *addr) {
 /* VM 빌드의 lazy 페이지는 첫 접근 전까지 pml4에 매핑이 없으므로 SPT 등록 여부로 판단함. */
 static bool is_user_page_valid(const void *addr) {
 #ifdef VM
-	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL;
+	return spt_find_page(&thread_current()->spt, (void *)addr) != NULL ||
+		vm_stack_growth_available(addr, thread_current()->user_rsp);
 #else
 	return pml4_get_page(thread_current()->pml4, addr) != NULL;
 #endif
@@ -395,7 +399,9 @@ static bool is_user_page_valid(const void *addr) {
 static bool is_user_page_writable(const void *addr) {
 #ifdef VM
 	struct page *page = spt_find_page(&thread_current()->spt, (void *)addr);
-	return page != NULL && page->writable;
+	return page == NULL
+		? vm_stack_growth_available (addr, thread_current ()->user_rsp)
+		: page->writable;
 #else
 	return is_writable(pml4e_walk(thread_current()->pml4, (uint64_t)addr, false));
 #endif

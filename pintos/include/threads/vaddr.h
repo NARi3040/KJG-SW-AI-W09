@@ -37,6 +37,9 @@
 /* 유저 스택(user stack) 시작 */
 #define USER_STACK 0x47480000
 
+/* 유저 스택 확장 최대 크기 1MB */
+#define MAX_STACK (USER_STACK - (1 << 20))
+
 /* VADDR가 유저 가상 주소(user virtual address)이면 true를 반환함. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))
 

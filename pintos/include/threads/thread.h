@@ -130,6 +130,8 @@ struct thread {
 #ifdef VM
 	/* 스레드가 소유한 전체 가상 메모리의 테이블. */
 	struct supplemental_page_table spt;
+	/* 사용자 모드의 스택 포인터 저장용 */
+	uintptr_t user_rsp;
 #endif
 
 	/* thread.c가 소유함. */

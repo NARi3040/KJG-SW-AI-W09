@@ -1,6 +1,7 @@
 #ifndef VM_VM_H
 #define VM_VM_H
 #include <stdbool.h>
+#include <stdint.h>
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
 
@@ -113,6 +114,7 @@ void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
 void vm_free_frame (struct page *page, struct frame *frame);
+bool vm_stack_growth_available (const void *addr, uintptr_t rsp);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 
