@@ -162,7 +162,7 @@ vm_stack_growth (void *addr) {
 bool
 vm_stack_growth_available (const void *addr, uintptr_t rsp) {
 	uintptr_t va = (uintptr_t)addr;
-	return rsp >= 8 && addr >= rsp - 8 && addr >= MAX_STACK && addr < USER_STACK;
+	return rsp >= 8 && va >= rsp - 8 && va >= MAX_STACK && va < USER_STACK;
 }
 
 /* 쓰기 보호된(write_protected) 페이지에서 발생한 fault를 처리함. */
